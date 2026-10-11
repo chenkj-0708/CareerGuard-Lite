@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CareerGuard Lite</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><span class="mark">CG</span><div><h1>CareerGuard Lite</h1><p>Recruitment-risk triage</p></div></header>
+  <main>
+    <p class="scan-description">Checks visible job text and page information. Uncertain or elevated results receive selective backend verification.</p>
+    <button id="scan" class="primary">Scan this listing</button>
+    <p id="status" role="status"></p>
+    <section id="result" hidden></section>
+  </main>
+  <footer><button id="dashboard" class="link">Evaluation dashboard</button><span>Advisory only</span></footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

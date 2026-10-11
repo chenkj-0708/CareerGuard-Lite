@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CareerGuard Lite Evaluation Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header><div><p class="eyebrow">CAREERGUARD LITE</p><h1>Evaluation dashboard</h1><p>Compare browser-time baselines and export privacy-bounded research evidence.</p></div></header>
+  <main>
+    <section class="settings panel">
+      <h2>Runtime settings</h2>
+      <label>Backend URL<input id="backendUrl" type="url" value="http://127.0.0.1:8765"></label>
+      <button id="saveSettings">Save settings</button><button id="health">Test backend</button><span id="healthStatus"></span>
+    </section>
+    <section class="cards" id="summary"></section>
+    <section class="panel">
+      <div class="section-head"><div><h2>Captured evaluation records</h2><p>Each scan computes every local baseline from the same page. The selected mode is highlighted.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear logs</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Page</th><th>Selected mode</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Full</th><th>Signals</th><th>Truth</th><th>Condition</th><th>Latency</th></tr></thead><tbody id="records"></tbody></table></div>
+    </section>
+    <section class="panel"><h2>How to run a fair comparison</h2><ol><li>Use the same saved/public listing scenarios for every method.</li><li>Assign ground truth before analysing results.</li><li>Record text-only, metadata-only and multi-signal scores from one scan.</li><li>Run the backend and repeat uncertain/elevated cases for the full-workflow comparison.</li><li>Alternate score-only and explanation conditions across evaluators.</li></ol></section>
+  </main>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

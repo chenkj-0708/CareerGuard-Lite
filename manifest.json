@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "114",
+  "name": "CareerGuard Lite",
+  "version": "0.1.0",
+  "description": "Browser-native recruitment-risk triage with explainable selective escalation.",
+  "permissions": ["activeTab", "tabs", "scripting", "storage", "downloads", "sidePanel"],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open CareerGuard Lite"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "options_page": "dashboard.html"
+}
