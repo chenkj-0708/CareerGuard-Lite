@@ -8,13 +8,11 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 try:
-    from .verifier import VerificationEngine, CHECKS
+    from .verifier import VerificationEngine, HASH_VERSION
 except ImportError:
-    from verifier import VerificationEngine, CHECKS
+    from verifier import VerificationEngine, HASH_VERSION
 
-ENGINE = VerificationEngine()
 MAX_BODY_BYTES = 4096
-DOMAIN = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 IDENTIFIER = re.compile(r"[A-Za-z0-9-]{16,80}$")
 
 
@@ -38,35 +36,28 @@ class Protection:
         now = time.time()
         self.tokens = {k: v for k, v in self.tokens.items() if v > now}
         token = secrets.token_urlsafe(32)
-        self.tokens[token] = now + 60
+        self.tokens[token] = now + 7200
         return token
 
-    def validate(self, payload, token):
+    def validate(self, payload):
         now = time.time()
-        fields = {"request_id", "timestamp", "nonce", "company_domain", "contact_domain", "requested_checks"}
+        fields = {"requestId", "schemaVersion", "scenarioOrScanId", "excerptHash", "hashContractVersion", "capabilityToken"}
         if not isinstance(payload, dict) or set(payload) != fields:
             raise ValueError("Unexpected or missing request fields")
-        for key in ("request_id", "nonce"):
+        for key in ("requestId", "scenarioOrScanId"):
             if not isinstance(payload[key], str) or not IDENTIFIER.fullmatch(payload[key]):
-                raise ValueError("Invalid request identifier")
-        timestamp = payload["timestamp"]
-        if type(timestamp) not in (int, float) or not abs(now - timestamp) <= 60:
-            raise ValueError("Expired or invalid timestamp")
-        for key in ("company_domain", "contact_domain"):
-            if not isinstance(payload[key], str) or (payload[key] and not DOMAIN.fullmatch(payload[key])):
-                raise ValueError("Invalid domain")
-        checks = payload["requested_checks"]
-        if not isinstance(checks, list) or not checks or any(not isinstance(c, str) or c not in CHECKS for c in checks) or len(set(checks)) != len(checks):
-            raise ValueError("Unsupported checks")
-        if self.tokens.get(token, 0) <= now:
-            raise PermissionError("Expired or invalid token")
+                raise ValueError("Invalid opaque identifier")
+        if type(payload["schemaVersion"]) is not int or payload["schemaVersion"] != 1 or payload["hashContractVersion"] != HASH_VERSION:
+            raise ValueError("Unsupported schema/hash contract")
+        if not isinstance(payload["excerptHash"], str) or not re.fullmatch(r"[0-9a-f]{64}", payload["excerptHash"]):
+            raise ValueError("Invalid SHA-256 digest")
+        token = payload["capabilityToken"]
+        if not isinstance(token, str) or self.tokens.get(token, 0) <= now:
+            raise PermissionError("Expired or invalid capability")
         self.used = {k: v for k, v in self.used.items() if v > now}
-        identifiers = [("request", payload["request_id"]), ("nonce", payload["nonce"])]
-        if any(key in self.used for key in identifiers):
-            raise ValueError("Repeated request or nonce")
-        for key in identifiers:
-            self.used[key] = now + 120
-        del self.tokens[token]
+        if payload["requestId"] in self.used:
+            raise ValueError("Repeated request ID")
+        self.used[payload["requestId"]] = now + 600
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -79,7 +70,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.allowed():
             self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
             self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -107,7 +98,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         with self.server.protection.lock:
             token = self.server.protection.issue()
-        self.reply({"ok": True, "token": token, "expires_in": 60})
+        self.reply({"ok": True, "token": token, "expires_in": 7200})
 
     def do_POST(self):
         if not self.gate():
@@ -122,11 +113,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 raise ValueError("JSON content type required")
-            self.connection.settimeout(5)
+            self.connection.settimeout(2)
             payload = json.loads(self.rfile.read(length))
             with self.server.protection.lock:
-                self.server.protection.validate(payload, self.headers.get("Authorization", "").removeprefix("Bearer "))
-            self.reply(ENGINE.verify(payload))
+                self.server.protection.validate(payload)
+            self.request_id = payload["requestId"]
+            self.reply(self.server.engine.verify(payload))
         except PermissionError:
             self.reply({"error": "Token rejected"}, 401)
         except (ValueError, TypeError, TimeoutError):
@@ -134,19 +126,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         # Access log only: no bodies, domains, tokens or recruitment content.
-        print(json.dumps({"timestamp": time.time(), "event": "http_request", "status": args[-2] if len(args) >= 2 else None}))
+        print(json.dumps({"timestamp": time.time(), "event": "http_request", "status": args[-2] if len(args) >= 2 else None, "requestId": getattr(self, "request_id", None)}))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--allowed-origin", action="append", required=True)
+    parser.add_argument("--index-manifest", help="Authorised, pre-built read-only corroboration index manifest")
     args = parser.parse_args()
     if any(not re.fullmatch(r"chrome-extension://[a-p]{32}", origin) for origin in args.allowed_origin):
         parser.error("Use the exact chrome-extension:// origin shown on the extensions page")
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     server.allowed_origins = set(args.allowed_origin)
     server.protection = Protection()
+    server.engine = VerificationEngine(args.index_manifest)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,6 +1,7 @@
 const ids = ["backendUrl", "saveSettings", "health", "healthStatus", "summary", "records", "exportJson", "exportCsv", "clear"];
 const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 let logs = [];
+let extractionFailures = [];
 
 const tierIndex = { low: 0, uncertain: 1, elevated: 2 };
 const modeLabels = { textOnly: "Text-only", metadataOnly: "Metadata-only", multiSignal: "Multi-signal" };
@@ -26,7 +27,7 @@ function render() {
   el.records.innerHTML = [...logs].reverse().map((record) => {
     const counts = record.page.signalCounts;
     const signalSummary = counts
-      ? `${counts.visibleTextCharacters} chars / ${counts.applicationLinks} apply / ${counts.emails + counts.contactCues} contact`
+      ? `${counts.visibleTextCharacters} chars / ${counts.applicationLinks} apply / ${(counts.emailProviders ?? counts.emails ?? 0) + counts.contactCues} contact`
       : "legacy record";
     return `<tr>
       <td>${new Date(record.createdAt).toLocaleString()}</td><td>${escapeHtml(record.page.title || record.page.domain)}</td>
@@ -42,10 +43,10 @@ function escapeHtml(value) { const node=document.createElement("span");node.text
 function download(filename, content, type) { const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);chrome.downloads.download({url,filename,saveAs:true},()=>setTimeout(()=>URL.revokeObjectURL(url),1000)); }
 function csvCell(value) { const text=String(value??"");return /[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text; }
 
-async function load() { const stored=await chrome.storage.local.get(["scanLogs","backendUrl"]);logs=stored.scanLogs||[];el.backendUrl.value=stored.backendUrl||"http://127.0.0.1:8765";render(); }
+async function load() { const stored=await chrome.storage.local.get(["scanLogs","backendUrl","extractionFailures"]);logs=stored.scanLogs||[];extractionFailures=stored.extractionFailures||[];el.backendUrl.value=stored.backendUrl||"http://127.0.0.1:8765";render(); }
 el.saveSettings.addEventListener("click",async()=>{await chrome.storage.local.set({backendUrl:el.backendUrl.value.replace(/\/$/,"")});el.healthStatus.textContent="Saved.";});
 el.health.addEventListener("click",async()=>{el.healthStatus.textContent="Checking…";try{const response=await fetch(`${el.backendUrl.value.replace(/\/$/,"")}/health`);const data=await response.json();el.healthStatus.textContent=data.ok?"Backend ready.":"Backend returned an error.";}catch{el.healthStatus.textContent="Backend unavailable.";}});
-el.exportJson.addEventListener("click",()=>download("careerguard-evaluation.json",JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),records:logs},null,2),"application/json"));
-el.exportCsv.addEventListener("click",()=>{const header=["id","created_at","url","page_status","selected_mode","text_score","text_tier","metadata_score","metadata_tier","multi_score","multi_tier","full_score","full_tier","ground_truth","interface_condition","participant_decision","actionability","decision_time_ms","local_scoring_latency_ms","total_latency_ms","escalation_status"];const rows=logs.map(r=>[r.id,r.createdAt,r.page.url,r.page.pageStatus,r.selectedMode,r.baselines.textOnly.score,r.baselines.textOnly.tier,r.baselines.metadataOnly.score,r.baselines.metadataOnly.tier,r.baselines.multiSignal.score,r.baselines.multiSignal.tier,r.fullWorkflow?.score,r.fullWorkflow?.tier,r.groundTruth,r.interfaceCondition,r.participantResponse?.decision,r.participantResponse?.actionability,r.participantResponse?.decisionTimeMs,r.localScoringLatencyMs,r.totalLatencyMs,r.escalation.status]);download("careerguard-evaluation.csv",[header,...rows].map(row=>row.map(csvCell).join(",")).join("\n"),"text/csv");});
+el.exportJson.addEventListener("click",()=>download("careerguard-evaluation.json",JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),records:logs,extractionFailures},null,2),"application/json"));
+el.exportCsv.addEventListener("click",()=>{const header=["id","created_at","url","page_status","selected_mode","text_score","text_tier","metadata_score","metadata_tier","multi_score","multi_tier","full_score","full_tier","ground_truth","interface_condition","participant_decision","actionability","decision_time_ms","local_scoring_latency_ms","total_latency_ms","escalation_status","scenario_id","group_id","split","overlap_category","config_id","extraction_status_code","root_source","text_evidence","metadata_evidence"];const rows=logs.map(r=>[r.id,r.createdAt,r.page.url,r.page.pageStatus,r.selectedMode,r.baselines.textOnly.score,r.baselines.textOnly.tier,r.baselines.metadataOnly.score,r.baselines.metadataOnly.tier,r.baselines.multiSignal.score,r.baselines.multiSignal.tier,r.fullWorkflow?.score,r.fullWorkflow?.tier,r.groundTruth,r.interfaceCondition,r.participantResponse?.decision,r.participantResponse?.actionability,r.participantResponse?.decisionTimeMs,r.localScoringLatencyMs,r.totalLatencyMs,r.escalation.status,r.scenarioId,r.groupId,r.split,r.overlapCategory,r.configId,r.page.extractionStatusCode,r.page.rootSource,r.baselines.textOnly.evidenceSum,r.baselines.metadataOnly.evidenceSum]);download("careerguard-evaluation.csv",[header,...rows].map(row=>row.map(csvCell).join(",")).join("\n"),"text/csv");});
 el.clear.addEventListener("click",async()=>{if(!confirm("Clear all locally stored evaluation records?"))return;logs=[];await chrome.storage.local.set({scanLogs:[],lastScan:null});render();});
 load();

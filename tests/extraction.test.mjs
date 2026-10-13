@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.CG_PLAYWRIGHT || "playwright");
 const browser = await chromium.launch({ headless: true, channel: "msedge" });
+const pslSource = fs.readFileSync(new URL("../lib/public-suffix.js", import.meta.url), "utf8");
 const source = fs.readFileSync(new URL("../content-script.js", import.meta.url), "utf8");
 const description = "Software engineer job position. Responsibilities include maintaining applications and reviewing code. Requirements include JavaScript and communication skills. Salary and employment benefits are discussed during the interview. Apply through our official careers website.";
 const cases = [];
@@ -51,6 +52,8 @@ cases.push({ id: "Indeed-description-heading-sibling", domain: "malaysia.indeed.
   html: `<div><h4 data-testid="vj-job-description-heading">Full job description</h4><div class="react-native-html-content"><p>${adminDescription}</p></div></div>` });
 cases.push({ id: "Indeed-unrelated-react-native-content", domain: "malaysia.indeed.com", site: "Indeed", expected: "unavailable",
   html: `<div class="react-native-html-content"><p>${description}</p></div>` });
+cases.push({ id: "Indeed-pagesignal-caps", domain: "malaysia.indeed.com", site: "Indeed", expected: "reliable", expectedStrategy: "site-specific",
+  html: `<div id="jobDescriptionText"><div class="company">${"Example ".repeat(100)}</div><p>${description.repeat(130)}</p>${Array.from({length:110},(_,i)=>`<a href="https://target${i}.com/apply">Apply</a>`).join("")} recruiter@gmail.com recruiter2@gmail.com</div>` });
 fs.mkdirSync(new URL("../fixtures/extraction/", import.meta.url), { recursive: true });
 const manifest = [];
 try {
@@ -61,6 +64,7 @@ try {
     await page.evaluate(() => { globalThis.chrome = { runtime: { onMessage: {
       addListener(fn) { globalThis.extract = fn; }, removeListener(fn) { if (globalThis.extract === fn) globalThis.extract = null; }
     } } }; });
+    await page.evaluate(pslSource);
     await page.evaluate(source);
     if (item.delayedDescription) await page.evaluate(text => setTimeout(() => { document.getElementById("jobDescriptionText").textContent = text; }, 350), item.delayedDescription);
     await page.evaluate(source);
@@ -69,32 +73,45 @@ try {
     }), item.waitForContent || false);
     assert.equal(result.extractionStatus, item.expected, item.id);
     assert.equal(result.siteType, item.site, item.id);
+    assert.equal(result.schemaVersion, 1);
+    assert.ok(result.scanId);
+    assert.ok(!("emails" in result));
+    assert.equal(result.ExtractionSufficiency, Math.round(100 * result.extractionQuality));
+    assert.ok(result.rootSource && result.extractionStatusCode && result.truncationFlags);
+    if (item.expected === "reliable") assert.equal(result.pageStatus, "scoreable");
+    if (item.id === "Indeed-pagesignal-caps") {
+      assert.equal(Array.from(result.visibleText).length, 30000);
+      assert.equal(Array.from(result.companyText).length, 500);
+      assert.equal(result.links.length, 100);
+      assert.equal(result.applicationLinks.length, 20);
+      assert.deepEqual(result.truncationFlags, { visibleText: true, companyText: true, links: true, applicationLinks: true });
+    }
     if (item.expectedStrategy) assert.equal(result.extractionStrategy, item.expectedStrategy, item.id);
     if (item.id === "Indeed-reported-react-native-layout") {
       assert.equal(result.selectedContainer, ".simple-job-description-html");
       assert.equal(result.title, "TVET/Certification Program");
       assert.equal(result.visibleText, adminDescription);
-      assert.deepEqual(result.emails, []);
+      assert.deepEqual(result.emailProvider, []);
       assert.deepEqual(result.contactCues, []);
     }
     if (item.id === "Indeed-delayed-description") {
       assert.ok(result.extractionLatencyMs >= 300);
-      assert.deepEqual(result.emails, []);
+      assert.deepEqual(result.emailProvider, []);
       assert.ok(!result.visibleText.includes("unrelated recommendations"));
     }
     if (item.id === "Indeed-verification-wall") assert.equal(result.fallbackReason, "verification-required");
     if (item.id === "LinkedIn-reported-public-layout") {
       assert.equal(result.title, "Content Producer");
-      assert.deepEqual(result.emails, []);
+      assert.deepEqual(result.emailProvider, []);
     }
     if (item.id === "Generic-schema") {
       assert.equal(result.extractionStrategy, "schema.org-jobposting");
-      assert.equal(result.companyDomain, "employer.example.com");
+      assert.equal(result.schemaVersion, 1);
       assert.equal(result.visibleText, description);
     }
     if (["hidden", "navigation"].includes(item.id.split("-").pop())) {
       assert.ok(!result.visibleText.includes("deposit") && !result.visibleText.includes("WhatsApp"), item.id);
-      assert.deepEqual(result.emails, []);
+      assert.deepEqual(result.emailProvider, []);
       assert.deepEqual(result.applicationLinks, []);
     }
     fs.writeFileSync(new URL(`../fixtures/extraction/${item.id}.html`, import.meta.url), item.html);

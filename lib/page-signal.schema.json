@@ -1,0 +1,91 @@
+{
+  "title": "CareerGuard PageSignal v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "scanId",
+    "capturedAt",
+    "rootSource",
+    "selectorConfidence",
+    "extractionStatusCode",
+    "truncationFlags",
+    "fallbackFlags",
+    "extractionQuality",
+    "ExtractionSufficiency",
+    "pageStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "rootSource": {
+      "enum": [
+        "site-specific",
+        "schema.org-jobposting",
+        "jobposting",
+        "job-description",
+        "bounded-generic",
+        "none"
+      ]
+    },
+    "selectorConfidence": {
+      "enum": [
+        "high",
+        "bounded",
+        "none"
+      ]
+    },
+    "extractionStatusCode": {
+      "enum": [
+        "OK",
+        "AMBIGUOUS_LISTINGS",
+        "SITE_VERIFICATION_REQUIRED",
+        "DESCRIPTION_NOT_READY",
+        "NO_SINGLE_LISTING",
+        "INSUFFICIENT_VISIBLE_TEXT"
+      ]
+    },
+    "pageStatus": {
+      "enum": [
+        "scoreable",
+        "unsupported",
+        "extraction-limited"
+      ]
+    },
+    "visibleText": {
+      "type": "string",
+      "maxLength": 30000
+    },
+    "companyText": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "links": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "applicationLinks": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true
+    },
+    "emailProvider": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "extractionQuality": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "not": {
+    "required": [
+      "emails"
+    ]
+  }
+}

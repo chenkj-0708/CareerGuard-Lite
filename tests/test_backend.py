@@ -1,96 +1,103 @@
-import copy
+import hashlib
 import json
+import tempfile
 import threading
 import time
 import unittest
 import urllib.error
 import urllib.request
+from pathlib import Path
 from http.server import ThreadingHTTPServer
-from unittest.mock import patch
-from backend.verifier import VerificationEngine, public_addresses
+from backend.verifier import VerificationEngine, HASH_VERSION
+from backend.domains import PSL_SHA256, registrable_domain
 from backend.server import Handler, Protection
 
 
-def payload():
-    return {"request_id": "request-1234567890", "nonce": "nonce-12345678901", "timestamp": time.time(),
-            "company_domain": "example.com", "contact_domain": "mail.example.com",
-            "requested_checks": ["rdap_domain_registration", "website_reachable", "contact_domain_match"]}
+def payload(token="test-capability"):
+    return {"requestId":"request-1234567890","schemaVersion":1,"scenarioOrScanId":"scenario-123456789","excerptHash":"a"*64,"hashContractVersion":HASH_VERSION,"capabilityToken":token}
+
+
+def index_fixture(directory,domains=None):
+    path=Path(directory);raw=json.dumps({"schemaVersion":1,"entries":{"a"*64:domains or ["one.example.com","two.example.net","three.example.org"]}}).encode()
+    (path/"index.json").write_bytes(raw)
+    manifest={"indexVersion":"functional-test-only-v1","indexFile":"index.json","indexSha256":hashlib.sha256(raw).hexdigest(),"permissionBasis":"synthetic functional fixture only","sourceCategories":["synthetic"],"constructionWindow":"test setup before queries","eligibility":"synthetic only","exclusions":"all real/held-out scenarios","deduplication":"distinct PSL roots","contaminationChecks":"no real data","pslSha256":PSL_SHA256,"hashContractVersion":HASH_VERSION}
+    (path/"manifest.json").write_text(json.dumps(manifest),encoding="utf-8")
+    return path/"manifest.json"
 
 
 class VerifierTests(unittest.TestCase):
-    def test_evidence_only(self):
-        def fetch(url):
-            return 200, json.dumps({"objectClassName": "domain", "events": [{"eventAction": "registration", "eventDate": "2020-01-01T00:00:00Z"}]}).encode()
-        result = VerificationEngine(fetch).verify(payload())
-        self.assertNotIn("score", result)
-        self.assertNotIn("tier", result)
-        self.assertEqual(result["checks"]["contact_domain_match"]["status"], "supported")
-        self.assertGreater(result["checks"]["rdap_domain_registration"]["domain_age_days"], 0)
-
-    def test_timeout_unavailable(self):
-        def fail(url):
-            raise TimeoutError()
-        result = VerificationEngine(fail).verify(payload())
-        self.assertEqual(result["checks"]["rdap_domain_registration"]["status"], "unavailable")
-        self.assertEqual(result["checks"]["website_reachable"]["status"], "unavailable")
-
-    def test_missing_not_safe(self):
-        data = payload(); data["company_domain"] = ""
-        result = VerificationEngine().verify(data)
-        self.assertTrue(all(c["status"] == "inconclusive" for c in result["checks"].values()))
-
-    def test_private_addresses_blocked(self):
-        with patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 443))]):
-            with self.assertRaises(ValueError): public_addresses("example.com")
+    def test_missing_index_unavailable(self):
+        result=VerificationEngine().verify(payload())
+        self.assertEqual(result["status"],"unavailable");self.assertNotIn("score",result)
+    def test_read_only_context_and_no_insert(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=index_fixture(directory);before=(Path(directory)/"index.json").read_bytes();engine=VerificationEngine(path)
+            result=engine.verify(payload());self.assertEqual(result["duplicateSourceCount"],3)
+            self.assertEqual(result["contextReasons"][0]["points"],0)
+            data=payload();data["excerptHash"]="b"*64
+            self.assertEqual(engine.verify(data)["contextReasons"],[])
+            self.assertEqual((Path(directory)/"index.json").read_bytes(),before)
+            self.assertNotIn(data["excerptHash"],engine.entries)
+    def test_psl_domains_collapsed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=index_fixture(directory,["foo.github.io","jobs.foo.github.io","bar.github.io"])
+            result=VerificationEngine(path).verify(payload())
+            self.assertEqual(result["duplicateSourceCount"],2);self.assertEqual(result["contextReasons"],[])
+            self.assertTrue(result["gateSensitivity"]["atLeast2"])
+    def test_manifest_and_checksum_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=index_fixture(directory)
+            (Path(directory)/"index.json").write_text("{}")
+            with self.assertRaises(ValueError):VerificationEngine(path)
+    def test_psl_parity(self):
+        for host,expected in (("careers.example.co.uk","example.co.uk"),("foo.github.io","foo.github.io"),("a.b.ck","a.b.ck"),("www.ck","www.ck"),("127.0.0.1","")):
+            self.assertEqual(registrable_domain(host),expected)
 
 
 class SecurityTests(unittest.TestCase):
-    def test_replay_and_expiry(self):
-        guard = Protection(); data = payload()
-        guard.validate(data, guard.issue())
-        with self.assertRaises(ValueError): guard.validate(data, guard.issue())
-        data["request_id"] += "x"
-        with self.assertRaises(ValueError): guard.validate(data, guard.issue())
-        guard = Protection(); token = guard.issue(); guard.tokens[token] = time.time() - 1
-        with self.assertRaises(PermissionError): guard.validate(payload(), token)
-
-    def test_schema_and_freshness(self):
-        for change in ({"document_body": "raw"}, {"timestamp": 0}, {"requested_checks": ["anything"]}, {"company_domain": "127.0.0.1"}, {"timestamp": float("nan")}, {"requested_checks": [[]]}):
-            guard = Protection(); data = payload(); data.update(change)
-            with self.assertRaises(ValueError): guard.validate(data, guard.issue())
-
+    def test_replay_expiry_and_per_run_tokens(self):
+        guard=Protection();data=payload(guard.issue());guard.validate(data)
+        with self.assertRaises(ValueError):guard.validate(data)
+        guard.tokens[data["capabilityToken"]]=time.time()-1
+        data["requestId"]+="x"
+        with self.assertRaises(PermissionError):guard.validate(data)
+        with self.assertRaises(PermissionError):Protection().validate(data)
+    def test_exact_six_fields(self):
+        for extra in ("document_body","company_domain","pageRootDomain","localScore","timestamp","nonce"):
+            guard=Protection();data=payload(guard.issue());data[extra]="anything"
+            with self.assertRaises(ValueError):guard.validate(data)
+    def test_schema_hash_and_size_types(self):
+        for change in ({"excerptHash":"bad"},{"schemaVersion":True},{"hashContractVersion":"other"},{"scenarioOrScanId":"short"}):
+            guard=Protection();data=payload(guard.issue());data.update(change)
+            with self.assertRaises(ValueError):guard.validate(data)
     def test_rate(self):
-        guard = Protection()
-        self.assertTrue(all(guard.rate() for _ in range(30)))
-        self.assertFalse(guard.rate())
-
-    def test_http_rejections(self):
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        server.allowed_origins = {"chrome-extension://" + "a"*32}
-        server.protection = Protection()
-        worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
-        base = f"http://127.0.0.1:{server.server_port}"
-        def request(body=None, origin=None, token=None):
-            headers = {"Content-Type": "application/json"}
-            if origin: headers["Origin"] = origin
-            if token: headers["Authorization"] = "Bearer " + token
-            return urllib.request.urlopen(urllib.request.Request(base + ("/verify" if body is not None else "/health"), data=body, headers=headers))
+        guard=Protection();self.assertTrue(all(guard.rate() for _ in range(30)));self.assertFalse(guard.rate())
+    def test_replay_window(self):
+        guard=Protection();data=payload(guard.issue());now=time.time();guard.validate(data)
+        self.assertGreaterEqual(guard.used[data["requestId"]]-now,599)
+    def test_http_security_and_protocol(self):
+        server=ThreadingHTTPServer(("127.0.0.1",0),Handler);server.allowed_origins={"chrome-extension://"+"a"*32};server.protection=Protection();server.engine=VerificationEngine()
+        worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+        base=f"http://127.0.0.1:{server.server_port}"
+        def request(body=None,origin=None):
+            headers={"Content-Type":"application/json"}
+            if origin:headers["Origin"]=origin
+            return urllib.request.urlopen(urllib.request.Request(base+("/verify" if body is not None else "/health"),data=body,headers=headers))
         try:
-            for origin in (None, "https://evil.example"):
-                with self.assertRaises(urllib.error.HTTPError) as error: request(origin=origin)
-                self.assertEqual(error.exception.code, 403)
-                self.assertIsNone(error.exception.headers.get("Access-Control-Allow-Origin"))
-            origin = next(iter(server.allowed_origins))
-            for body, expected in ((b"x"*4097, 413), (b"{", 400), (b'{}', 400)):
-                with self.assertRaises(urllib.error.HTTPError) as error: request(body, origin)
-                self.assertEqual(error.exception.code, expected)
-            with request(origin=origin) as response:
-                token = json.load(response)["token"]
-            data = payload(); data["company_domain"] = ""
-            with request(json.dumps(data).encode(), origin, token) as response:
-                self.assertEqual(json.load(response)["schemaVersion"], 2)
-        finally:
-            server.shutdown(); server.server_close(); worker.join()
+            for origin in (None,"https://evil.example"):
+                with self.assertRaises(urllib.error.HTTPError) as error:request(origin=origin)
+                self.assertEqual(error.exception.code,403);self.assertIsNone(error.exception.headers.get("Access-Control-Allow-Origin"))
+            origin=next(iter(server.allowed_origins))
+            for body,expected in ((b"x"*4097,413),(b"{",400),(b"{}",400)):
+                with self.assertRaises(urllib.error.HTTPError) as error:request(body,origin)
+                self.assertEqual(error.exception.code,expected)
+            with request(origin=origin) as response:token=json.load(response)["token"]
+            data=payload(token)
+            with request(json.dumps(data).encode(),origin) as response:
+                self.assertEqual(json.load(response)["status"],"unavailable")
+            with self.assertRaises(urllib.error.HTTPError) as error:request(json.dumps(data).encode(),origin)
+            self.assertEqual(error.exception.code,400)
+        finally:server.shutdown();server.server_close();worker.join()
 
 
-if __name__ == "__main__": unittest.main()
+if __name__=="__main__":unittest.main()

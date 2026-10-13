@@ -1,87 +1,61 @@
-"""External evidence only. Never computes or modifies browser risk scores."""
-import http.client
-import ipaddress
+"""Read-only, authorised exact-hash index lookup; no domain/RDAP requests."""
+import hashlib
 import json
-import socket
-import ssl
 import time
-from datetime import datetime, timezone
-from urllib.parse import urlsplit
-
-CHECKS = {"rdap_domain_registration", "website_reachable", "contact_domain_match"}
-
-
-def public_addresses(domain):
-    addresses = {item[4][0] for item in socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)}
-    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
-        raise ValueError("Non-public destination")
-    return addresses
-
-
-def public_get(url, redirects=0):
-    """Pin the connection to a checked public IP; validate every RDAP redirect."""
-    parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.port not in (None, 443) or parsed.username:
-        raise ValueError("HTTPS public destinations required")
-    address = sorted(public_addresses(parsed.hostname))[0]
-    conn = http.client.HTTPSConnection(parsed.hostname, timeout=3)
-    raw = socket.create_connection((address, 443), timeout=3)
-    conn.sock = ssl.create_default_context().wrap_socket(raw, server_hostname=parsed.hostname)
-    try:
-        conn.request("GET", parsed.path or "/", headers={"Accept": "application/rdap+json, application/json", "User-Agent": "CareerGuard-Lite/0.2"})
-        response = conn.getresponse()
-        if response.status in (301, 302, 303, 307, 308) and redirects < 3:
-            from urllib.parse import urljoin
-            return public_get(urljoin(url, response.getheader("Location", "")), redirects + 1)
-        body = response.read(256001)
-        if len(body) > 256000:
-            raise ValueError("External response too large")
-        return response.status, body
-    finally:
-        conn.close()
+import uuid
+from pathlib import Path
+try:
+    from .domains import registrable_domain, PSL_SHA256
+except ImportError:
+    from domains import registrable_domain, PSL_SHA256
+HASH_VERSION = "HashNormalise-CORR-v1"
+DUPLICATE_MESSAGE = "Similar listing content appears on multiple domains. This can occur through legitimate syndication or reposting and is not proof of fraud."
 
 
 class VerificationEngine:
-    def __init__(self, fetch=public_get):
-        self.fetch = fetch
+    def __init__(self, manifest_path=None):
+        self.entries = None
+        self.manifest = None
+        self.run_id = str(uuid.uuid4())
+        if manifest_path:
+            path = Path(manifest_path).resolve()
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            required = {"indexVersion", "indexFile", "indexSha256", "permissionBasis", "sourceCategories", "constructionWindow", "eligibility", "exclusions", "deduplication", "contaminationChecks", "pslSha256", "hashContractVersion"}
+            if not required.issubset(manifest) or any(not manifest[key] for key in required):
+                raise ValueError("Incomplete authorised index manifest")
+            if manifest["pslSha256"] != PSL_SHA256 or manifest["hashContractVersion"] != HASH_VERSION:
+                raise ValueError("Index/browser PSL or hash contract mismatch")
+            index_path = (path.parent / manifest["indexFile"]).resolve()
+            if path.parent not in index_path.parents:
+                raise ValueError("Index must reside within its manifest directory")
+            raw = index_path.read_bytes()
+            if hashlib.sha256(raw).hexdigest() != manifest["indexSha256"]:
+                raise ValueError("Index checksum mismatch")
+            data = json.loads(raw)
+            entries = data.get("entries")
+            if data.get("schemaVersion") != 1 or not isinstance(entries, dict):
+                raise ValueError("Invalid read-only index")
+            import re
+            frozen = {}
+            for digest, domains in entries.items():
+                if not re.fullmatch(r"[0-9a-f]{64}", digest) or not isinstance(domains, list) or any(not isinstance(d, str) for d in domains):
+                    raise ValueError("Invalid index entry")
+                roots = frozenset(registrable_domain(d) for d in domains)
+                if "" in roots: raise ValueError("Invalid source domain")
+                frozen[digest] = roots
+            from types import MappingProxyType
+            self.entries = MappingProxyType(frozen)
+            self.manifest = manifest
 
     def verify(self, payload):
         start = time.perf_counter()
-        domain = payload["company_domain"]
-        contact = payload["contact_domain"]
-        checks = {}
-        for name in payload["requested_checks"]:
-            began = time.perf_counter()
-            error_type = None
-            try:
-                if not domain or (name == "contact_domain_match" and not contact):
-                    value = {"status": "inconclusive", "reason": "missing-domain-evidence"}
-                elif name == "contact_domain_match":
-                    matches = contact == domain or contact.endswith("." + domain) or domain.endswith("." + contact)
-                    value = {"status": "supported" if matches else "contradicted"}
-                elif name == "website_reachable":
-                    status, _ = self.fetch("https://" + domain + "/")
-                    value = {"status": "supported" if 200 <= status < 400 else "unavailable", "http_status": status}
-                else:
-                    status, body = self.fetch("https://rdap.org/domain/" + domain)
-                    if status == 404:
-                        value = {"status": "contradicted", "registered": False}
-                    elif status == 200:
-                        data = json.loads(body)
-                        if data.get("objectClassName") != "domain":
-                            raise ValueError("Invalid RDAP domain response")
-                        value = {"status": "supported", "registered": True, "domain_status": data.get("status", [])}
-                        event = next((e for e in data.get("events", []) if e.get("eventAction") == "registration"), None)
-                        if event:
-                            date = datetime.fromisoformat(event["eventDate"].replace("Z", "+00:00"))
-                            value["registration_date"] = event["eventDate"]
-                            value["domain_age_days"] = max(0, (datetime.now(timezone.utc) - date).days)
-                        value["registrar"] = next((e.get("handle") for e in data.get("entities", []) if "registrar" in e.get("roles", [])), None)
-                    else:
-                        value = {"status": "unavailable", "http_status": status}
-            except Exception as error:
-                error_type = type(error).__name__
-                value = {"status": "unavailable", "error_type": error_type}
-            checks[name] = value
-            print(json.dumps({"request_id": payload["request_id"], "timestamp": datetime.now(timezone.utc).isoformat(), "check_type": name, "status": value["status"], "response_time_ms": round((time.perf_counter()-began)*1000, 2), "error_type": error_type}))
-        return {"schemaVersion": 2, "request_id": payload["request_id"], "checks": checks, "latencyMs": round((time.perf_counter()-start)*1000, 2)}
+        count = len(self.entries.get(payload["excerptHash"], ())) if self.entries is not None else 0
+        status = "completed" if self.entries is not None else "unavailable"
+        reasons = [{"id": "CTX_CROSS_DOMAIN_DUPLICATE", "points": 0, "role": "context", "message": DUPLICATE_MESSAGE}] if count >= 3 else []
+        result = {"schemaVersion": 1, "requestId": payload["requestId"], "status": status,
+                  "corroborationIndexVersion": self.manifest["indexVersion"] if self.manifest else None,
+                  "runId": self.run_id, "duplicateSourceCount": count, "contextReasons": reasons,
+                  "gateSensitivity": {"atLeast2": count >= 2, "atLeast3": count >= 3, "atLeast4": count >= 4},
+                  "latencyMs": round((time.perf_counter()-start)*1000, 2)}
+        if status == "unavailable": result["errorCode"] = "AUTHORISED_INDEX_NOT_CONFIGURED"
+        return result

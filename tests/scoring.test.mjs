@@ -1,32 +1,31 @@
 import assert from "node:assert/strict";
-import { combineBackend, scoreAll } from "../lib/scoring.js";
-
-const safe = {
-  url: "https://jobs.example.com/software-engineer", protocol: "https:", title: "Software Engineer",
-  companyText: "Example Sdn Bhd", visibleText: "Software engineer position with detailed responsibilities, requirements, benefits, team information and a standard application process. ".repeat(8),
-  links: ["https://jobs.example.com/apply"], externalLinks: [], applicationLinks: ["https://jobs.example.com/apply"], emails: ["jobs@example.com"], contactCues: [], extractionQuality: 1
-};
-const risky = {
-  ...safe, url: "http://unknown.example/jobs", protocol: "http:",
-  visibleText: "URGENT HIRING. Pay a registration fee. Contact us on WhatsApp. Guaranteed income. Send bank account details.",
-  applicationLinks: ["https://bit.ly/apply-now"], externalLinks: ["https://bit.ly/apply-now"], emails: ["recruiter@gmail.com"], contactCues: ["whatsapp"], extractionQuality: .4
-};
-
-const safeScores = scoreAll(safe);
-const riskyScores = scoreAll(risky);
-assert.equal(safeScores.textOnly.tier, "low");
-assert.ok(riskyScores.textOnly.score > safeScores.textOnly.score);
-assert.ok(riskyScores.metadataOnly.score > safeScores.metadataOnly.score);
-assert.ok(riskyScores.multiSignal.score >= 60);
-const local = riskyScores.multiSignal;
-const full = combineBackend(local, { schemaVersion: 2, score: 100, tier: "low", confidence: 0,
-  checks: { contact_domain_match: { status: "contradicted" } } });
-assert.equal(full.model, "full-workflow");
-assert.equal(full.score, local.score);
-assert.equal(full.tier, local.tier);
-assert.equal(full.confidence, local.confidence);
-assert.deepEqual(full.reasons, local.reasons);
-assert.throws(() => combineBackend(local, { score: 0 }));
-assert.throws(() => combineBackend(local, { schemaVersion: 2, checks: { x: { status: "safe" } } }));
-assert.throws(() => scoreAll({ ...safe, extractionStatus: "unavailable" }));
-console.log("scoring and authority tests passed");
+import { combineBackend, scoreAll, scoreTextOnly, scoreMetadataOnly, scoringInternals } from "../lib/scoring.js";
+import { DUPLICATE_MESSAGE } from "../lib/risk-rules.js";
+const safe = { extractionStatus: "reliable", pageStatus: "scoreable", url: "https://jobs.example.com/role", protocol: "https:", title: "Engineer", companyText: "Example", visibleText: "Responsibilities include maintaining applications and reviewing code. Requirements include JavaScript. ".repeat(8), links: [], externalLinks: [], applicationLinks: [], emailProvider: [], contactCues: [], extractionQuality: 1 };
+assert.equal(scoreAll(safe).multiSignal.score, 5);
+const fee = scoreTextOnly({ ...safe, visibleText: "Pay a registration fee before onboarding." });
+assert.equal(fee.evidenceSum, 30); assert.equal(fee.score, 33);
+assert.equal(fee.uncertaintyReasons[0].points, 0);
+for (const text of ["Competitive pay and payment schedule.", "No experience required.", "No registration fee is required.", "Do not send money.", "Fraud alert: scammers request a registration fee.", 'An example phrase is "registration fee".', "The employer pays the training fee."]) assert.equal(scoreTextOnly({ ...safe, visibleText: text }).evidenceSum, 0, text);
+for (const [text,id] of [["Pay a registration fee.","TXT_ADVANCE_FEE"],["Send money.","TXT_ADVANCE_FEE"],["Buy equipment.","TXT_ADVANCE_FEE"],["Send your bank account.","TXT_SENSITIVE"],["Urgent hiring.","TXT_PRESSURE"],["Contact via WhatsApp.","TXT_OFFPLATFORM"],["Earn RM500 daily.","TXT_INCOME"],["Earn $1,500 per day.","TXT_INCOME"],["No interview.","TXT_SCREENING"]]) assert.ok(scoreTextOnly({ ...safe, visibleText: text }).scoredReasons.some(r=>r.id===id), text);
+assert.equal(scoreTextOnly({ ...safe, visibleText: "registration fee ".repeat(20) }).evidenceSum,30);
+const maxPage = { ...safe, protocol:"http:", url:"http://example.com/role", visibleText: "Registration fee. Bank account. Urgent hiring. WhatsApp. Guaranteed income. No interview.", applicationLinks:["https://bit.ly/x"], emailProvider:["gmail.com"], contactCues:["whatsapp"], externalLinks:Array.from({length:8},(_,i)=>`https://domain${i}.com/x`) };
+const maximum=scoreAll(maxPage);
+assert.equal(maximum.textOnly.evidenceSum,101); assert.equal(maximum.metadataOnly.evidenceSum,49);
+assert.equal(maximum.multiSignal.score,100);
+assert.ok(!maximum.multiSignal.reasons.some(r=>r.id==="META_MESSAGING"));
+const metadata=scoreMetadataOnly({ ...safe, protocol:"http:", url:"http://jobs.example.com/x", emailProvider:["gmail.com"], applicationLinks:["https://ats.example.net/x"], contactCues:["whatsapp"], extractionQuality:.2 });
+assert.equal(metadata.evidenceSum,18); assert.equal(metadata.score,40);
+assert.equal(metadata.contextReasons.find(r=>r.id==="META_EXTERNAL_APP").points,0);
+assert.equal(metadata.uncertaintyReasons.find(r=>r.id==="META_EXTRACTION_LOW").points,0);
+const mixed=scoreAll({ ...maxPage, externalLinks:[], protocol:"https:",url:"https://example.com/x" });
+assert.equal(mixed.multiSignal.score,Math.round((mixed.textOnly.score+mixed.metadataOnly.score)/2));
+assert.equal(mixed.multiSignal.ExtractionSufficiency,100);
+assert.equal(mixed.multiSignal.TierBoundaryDistance,Math.round(100*Math.min(Math.abs(mixed.multiSignal.score-30),Math.abs(mixed.multiSignal.score-60),30)/30));
+for(const [host,root] of [["careers.example.co.uk","example.co.uk"],["foo.github.io","foo.github.io"],["bar.foo.github.io","foo.github.io"],["a.b.ck","a.b.ck"],["www.ck","www.ck"],["jobs.example.com.my","example.com.my"],["127.0.0.1",""],["co.uk",""]]) assert.equal(scoringInternals.registrableDomain(host),root,host);
+const backend={ schemaVersion:1, status:"completed", duplicateSourceCount:3, contextReasons:[{id:"CTX_CROSS_DOMAIN_DUPLICATE",points:0,role:"context",message:DUPLICATE_MESSAGE}] };
+const full=combineBackend(mixed.multiSignal,{ ...backend, score:0,tier:"low" });
+assert.equal(full.score,mixed.multiSignal.score); assert.deepEqual(full.reasons,mixed.multiSignal.reasons);
+assert.throws(()=>combineBackend(mixed.multiSignal,{...backend,contextReasons:[{id:"anything",points:5}]}));
+assert.throws(()=>scoreAll({...safe,extractionStatus:"unavailable"}));
+console.log("thesis scoring, rule boundaries, PSL and authority tests passed");

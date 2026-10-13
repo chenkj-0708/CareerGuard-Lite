@@ -1,0 +1,14 @@
+{
+  "analysisVersion": "rq1-thesis-v1",
+  "validationTieBreak": "textOnly",
+  "lowerOverlapMinGroups": null,
+  "sealedBeforeHeldOut": false,
+  "precisionJustified": false,
+  "conformancePassed": false,
+  "leakageAuditPassed": false,
+  "overlapTaxonomySealed": false,
+  "note": "Template only. Actual independent governance evidence must be completed and sealed before held-out access. The thesis does not specify a numerical lower-overlap minimum or tie branch; these cannot be inferred from test outcomes.",
+  "annotationProtocolVersion": null,
+  "unresolvedCrossSplitPairs": null,
+  "lowerOverlapClassMinGroups": null
+}

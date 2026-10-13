@@ -493,5 +493,16 @@
     "public_demo_allowed": true,
     "adjudication_status": "automated conformance expectation",
     "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-pagesignal-caps",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-pagesignal-caps.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
   }
 ]
