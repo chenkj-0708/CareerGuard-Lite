@@ -1,0 +1,58 @@
+{
+  "audit_version": "emscad-near-duplicates-v1",
+  "dataset_sha256": "59253295129d8b6a27607f9904f7d4ddf4dbb0ee35e079c7eb51b58b5e62bf60",
+  "detector_sha256": "fdd5b80221457b47f431ed61e033d2501a5b57093ba865b71e261c633291b71c",
+  "summary": {
+    "normalisation_version": "HashNormalise-DUP-v1",
+    "shingle_size": 5,
+    "jaccard_threshold": 0.8,
+    "rows": 17554,
+    "independent_groups": 13060,
+    "multi_record_groups": 1450,
+    "largest_group": 411,
+    "exact_text_duplicate_groups": 539,
+    "exact_text_duplicate_extra_rows": 1682,
+    "near_duplicate_pairs": 111385,
+    "short_text_without_five_token_shingles": 0,
+    "audit_seconds": 17.855643599992618,
+    "policy": "All >=threshold candidates are conservatively co-grouped; no human SAME_GROUP confirmation is asserted.",
+    "candidate_pairs_checked": 134229,
+    "prefix_candidates": 134229,
+    "unique_shingles": 2958254
+  },
+  "post_split_summary": {
+    "normalisation_version": "HashNormalise-DUP-v1",
+    "shingle_size": 5,
+    "jaccard_threshold": 0.8,
+    "rows": 17554,
+    "independent_groups": 13060,
+    "multi_record_groups": 1450,
+    "largest_group": 411,
+    "exact_text_duplicate_groups": 539,
+    "exact_text_duplicate_extra_rows": 1682,
+    "near_duplicate_pairs": 111385,
+    "short_text_without_five_token_shingles": 0,
+    "audit_seconds": 18.594153699988965,
+    "policy": "All >=threshold candidates are conservatively co-grouped; no human SAME_GROUP confirmation is asserted.",
+    "candidate_pairs_checked": 134229,
+    "prefix_candidates": 134229,
+    "unique_shingles": 2958254
+  },
+  "legacy_reconstructed": {
+    "group_leakage_count": 840,
+    "cross_split_near_pair_count": 50336,
+    "cross_split_exact_edge_count": 691,
+    "train_test_near_pair_count": 24845,
+    "passed": false
+  },
+  "grouped": {
+    "group_leakage_count": 0,
+    "cross_split_near_pair_count": 0,
+    "cross_split_exact_edge_count": 0,
+    "train_test_near_pair_count": 0,
+    "passed": true
+  },
+  "legacy_boundary": "The original split-ID file was not retained. Legacy membership is reconstructed using the prior row-split code, current eligible rows, seed 42 and recorded runtime; not asserted to be the historical archived membership.",
+  "split_policy": "20 stratified group folds: 14 train, 3 validation, 3 test; group integrity overrides exact row percentages",
+  "review_boundary": "Threshold candidates are deliberately co-grouped without pretending human confirmation. Boilerplate/template false positives can reduce independent support; no labels or model outcomes choose the threshold."
+}

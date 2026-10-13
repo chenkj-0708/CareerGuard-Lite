@@ -48,7 +48,13 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedGroupKFold
+from sklearn.base import clone
+
+try:
+    from .near_duplicates import audit_texts, cross_split_audit, DEFAULT_THRESHOLD
+except ImportError:
+    from near_duplicates import audit_texts, cross_split_audit, DEFAULT_THRESHOLD
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
@@ -95,21 +101,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "data" / "fake_job_postings.csv",
+        default=Path(__file__).resolve().parent / "data" / "fake_job_postings.csv",
     )
     parser.add_argument(
         "--results-dir",
         type=Path,
-        default=Path(__file__).resolve().parent / "block1_results",
+        default=Path(__file__).resolve().parent / "block1_results_near_duplicate_v1",
     )
     parser.add_argument(
         "--models-dir",
         type=Path,
-        default=Path(__file__).resolve().parent / "block1_models",
+        default=Path(__file__).resolve().parent / "block1_models_near_duplicate_v1",
     )
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--max-features", type=int, default=40_000)
     parser.add_argument("--timing-repeats", type=int, default=7)
+    parser.add_argument("--near-threshold", type=float, default=DEFAULT_THRESHOLD)
+    parser.add_argument("--audit-only", action="store_true")
     return parser.parse_args()
 
 
@@ -195,7 +203,7 @@ def load_and_clean(path: Path) -> tuple[pd.DataFrame, pd.DataFrame, CleanReport]
     return data, missing_report, report
 
 
-def split_data(
+def legacy_row_split(
     data: pd.DataFrame, random_state: int
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     train, temporary = train_test_split(
@@ -217,6 +225,75 @@ def split_data(
     return train, validation, test
 
 
+def split_data(data: pd.DataFrame, random_state: int):
+    if "duplicate_group_id" not in data:
+        raise ValueError("Duplicate grouping must be completed before splitting")
+    if data["duplicate_group_id"].nunique() < 20:
+        raise ValueError("The declared 20-fold grouped 70/15/15 allocation requires at least 20 independent groups")
+    folds = np.full(len(data), -1, dtype=int)
+    splitter = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=random_state)
+    for fold, (_, held) in enumerate(splitter.split(data, data[TARGET_COLUMN], groups=data["duplicate_group_id"])):
+        folds[held] = fold
+    train = data.loc[folds < 14].copy()
+    validation = data.loc[(folds >= 14) & (folds < 17)].copy()
+    test = data.loc[folds >= 17].copy()
+    for left, right in ((train, validation), (train, test), (validation, test)):
+        if set(left["duplicate_group_id"]) & set(right["duplicate_group_id"]):
+            raise RuntimeError("Duplicate group leakage")
+    if any(frame[TARGET_COLUMN].nunique() != 2 for frame in (train, validation, test)):
+        raise RuntimeError("Grouped split lacks both classes; report infeasibility rather than selecting a favourable test split")
+    return train, validation, test
+
+
+def prepare_audited_split(data, args):
+    print(f"Auditing {len(data)} eligible postings at Jaccard >= {args.near_threshold}", flush=True)
+    audit = audit_texts(data["combined_text"].tolist(), data[ID_COLUMN].tolist(), args.near_threshold)
+    data = data.copy()
+    data["duplicate_group_id"] = audit["groups"]
+    data["normalised_text_sha256"] = audit["normalised_hashes"]
+    legacy = legacy_row_split(data, args.random_state)
+    old_membership = {}
+    for name, frame in zip(("train", "validation", "test"), legacy):
+        old_membership.update(dict.fromkeys(frame.index, name))
+    old_labels = [old_membership[i] for i in data.index]
+    old_check = cross_split_audit(audit, old_labels)
+    train, validation, test = split_data(data, args.random_state)
+    new_membership = {}
+    for name, frame in zip(("train", "validation", "test"), (train, validation, test)):
+        new_membership.update(dict.fromkeys(frame.index, name))
+    new_labels = [new_membership[i] for i in data.index]
+    # Independent second pass recomputes shingles and the exhaustive-filtered join.
+    print("Recomputing near-duplicate detection after grouped allocation", flush=True)
+    post_audit = audit_texts(data["combined_text"].tolist(), data[ID_COLUMN].tolist(), args.near_threshold)
+    final_check = cross_split_audit(post_audit, new_labels)
+    pair_rows = []
+    for a,b,jaccard,overlap,union in audit["pairs"]:
+        pair_rows.append({"job_id_a":int(data.iloc[a][ID_COLUMN]),"job_id_b":int(data.iloc[b][ID_COLUMN]),
+                          "jaccard":jaccard,"overlap_shingles":overlap,"union_shingles":union,
+                          "legacy_split_a":old_labels[a],"legacy_split_b":old_labels[b],
+                          "group_id":audit["groups"][a],"new_split_a":new_labels[a],"new_split_b":new_labels[b],
+                          "review_status":"UNREVIEWED_CONSERVATIVE_SAME_GROUP"})
+    pd.DataFrame(pair_rows, columns=["job_id_a","job_id_b","jaccard","overlap_shingles","union_shingles","legacy_split_a","legacy_split_b","group_id","new_split_a","new_split_b","review_status"]).to_csv(args.results_dir/"near_duplicate_pairs.csv",index=False)
+    membership=data[[ID_COLUMN,TARGET_COLUMN,"duplicate_group_id","normalised_text_sha256"]].copy()
+    membership["legacy_reconstructed_split"]=old_labels;membership["split"]=new_labels
+    membership.to_csv(args.results_dir/"duplicate_group_membership.csv",index=False)
+    membership.groupby("duplicate_group_id").agg(rows=(ID_COLUMN,"size"),fraudulent=(TARGET_COLUMN,"sum"),split=("split","first")).to_csv(args.results_dir/"duplicate_group_summary.csv")
+    for name,check,labels in (("legacy",old_check,old_labels),("grouped",final_check,new_labels)):
+        pd.DataFrame([{"job_id_a":int(data.iloc[a][ID_COLUMN]),"job_id_b":int(data.iloc[b][ID_COLUMN]),"jaccard":score,"split_a":labels[a],"split_b":labels[b]} for a,b,score in check["near_pairs"]],columns=["job_id_a","job_id_b","jaccard","split_a","split_b"]).to_csv(args.results_dir/f"{name}_cross_split_near_duplicates.csv",index=False)
+    concise=lambda check:{key:value for key,value in check.items() if key not in ("near_pairs","exact_pairs")}
+    report={"audit_version":"emscad-near-duplicates-v1","dataset_sha256":sha256_file(args.data),
+            "detector_sha256":sha256_file(Path(__file__).with_name("near_duplicates.py")),
+            "summary":audit["summary"],"post_split_summary":post_audit["summary"],
+            "legacy_reconstructed":concise(old_check),"grouped":concise(final_check),
+            "legacy_boundary":"The original split-ID file was not retained. Legacy membership is reconstructed using the prior row-split code, current eligible rows, seed 42 and recorded runtime; not asserted to be the historical archived membership.",
+            "split_policy":"20 stratified group folds: 14 train, 3 validation, 3 test; group integrity overrides exact row percentages",
+            "review_boundary":"Threshold candidates are deliberately co-grouped without pretending human confirmation. Boilerplate/template false positives can reduce independent support; no labels or model outcomes choose the threshold."}
+    (args.results_dir/"leakage_audit.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+    print(json.dumps({"legacy_reconstructed":concise(old_check),"grouped":concise(final_check),"groups":audit["summary"]["independent_groups"]},indent=2),flush=True)
+    if not final_check["passed"]:raise RuntimeError("Leakage audit failed; model fitting is prohibited")
+    return data,train,validation,test,report
+
+
 def make_text_vectorizer(max_features: int) -> TfidfVectorizer:
     return TfidfVectorizer(
         lowercase=True,
@@ -232,7 +309,7 @@ def make_text_vectorizer(max_features: int) -> TfidfVectorizer:
 def make_classifier(random_state: int) -> LogisticRegression:
     return LogisticRegression(
         class_weight="balanced",
-        max_iter=2_000,
+        max_iter=1_000,
         solver="liblinear",
         random_state=random_state,
     )
@@ -305,8 +382,8 @@ def select_f1_threshold(y_true: np.ndarray, scores: np.ndarray) -> tuple[float, 
     )
     best_f1 = float(np.nanmax(f1_values))
     tied = np.flatnonzero(np.isclose(f1_values, best_f1, rtol=0, atol=1e-12))
-    # A higher threshold is the conservative tie-break for an advisory warning tool.
-    best_index = int(tied[-1])
+    # Thesis: choose the threshold closest to 0.5, then the smaller threshold.
+    best_index = min(map(int, tied), key=lambda i: (abs(float(thresholds[i])-0.5),float(thresholds[i])))
     return float(thresholds[best_index]), best_f1
 
 
@@ -358,6 +435,7 @@ def split_summary(name: str, frame: pd.DataFrame) -> dict[str, Any]:
     return {
         "split": name,
         "rows": len(frame),
+        "independent_groups": int(frame["duplicate_group_id"].nunique()),
         "real": int(counts.get(0, 0)),
         "fake": int(counts.get(1, 0)),
         "fake_percent": round(float(frame[TARGET_COLUMN].mean() * 100), 2),
@@ -374,7 +452,10 @@ def run_experiment(args: argparse.Namespace) -> None:
     args.models_dir.mkdir(parents=True, exist_ok=True)
 
     data, missing_report, clean_report = load_and_clean(args.data)
-    train, validation, test = split_data(data, args.random_state)
+    data, train, validation, test, leakage_report = prepare_audited_split(data, args)
+    if args.audit_only:
+        print("Audit-only run complete; no baseline fitted", flush=True)
+        return
     y_train = train[TARGET_COLUMN].to_numpy()
     y_validation = validation[TARGET_COLUMN].to_numpy()
     y_test = test[TARGET_COLUMN].to_numpy()
@@ -392,12 +473,19 @@ def run_experiment(args: argparse.Namespace) -> None:
         x_validation = model_view(validation, model_name)
         x_test = model_view(test, model_name)
 
+        print(f"Fitting {model_name}: validation-only C grid [0.1, 1, 10]",flush=True)
         fit_started = time.perf_counter()
-        model.fit(x_train, y_train)
-        fit_seconds = time.perf_counter() - fit_started
-
-        validation_scores = model.predict_proba(x_validation)[:, 1]
-        threshold, validation_f1 = select_f1_threshold(y_validation, validation_scores)
+        candidates=[]
+        for regularisation in (0.1,1.0,10.0):
+            candidate=clone(model).set_params(classifier__C=regularisation)
+            candidate.fit(x_train,y_train)
+            scores=candidate.predict_proba(x_validation)[:,1]
+            ap=float(average_precision_score(y_validation,scores))
+            candidates.append((ap,regularisation,candidate,scores))
+            print(f"  C={regularisation}: validation AUPRC={ap:.6f}",flush=True)
+        ap,selected_c,model,validation_scores=sorted(candidates,key=lambda item:(-item[0],item[1]))[0]
+        fit_seconds=time.perf_counter()-fit_started
+        threshold,validation_f1=select_f1_threshold(y_validation,validation_scores)
         test_scores = model.predict_proba(x_test)[:, 1]
         test_predictions = (test_scores >= threshold).astype(int)
 
@@ -407,6 +495,9 @@ def run_experiment(args: argparse.Namespace) -> None:
             "Precision": precision_score(y_test, test_predictions, zero_division=0),
             "Recall": recall_score(y_test, test_predictions, zero_division=0),
             "F1": f1_score(y_test, test_predictions, zero_division=0),
+            "Macro F1": f1_score(y_test,test_predictions,average="macro",zero_division=0),
+            "Selected C": selected_c,
+            "Validation AUPRC": ap,
             "Accuracy": accuracy_score(y_test, test_predictions),
             "Balanced accuracy": balanced_accuracy_score(y_test, test_predictions),
             "MCC": matthews_corrcoef(y_test, test_predictions),
@@ -437,6 +528,9 @@ def run_experiment(args: argparse.Namespace) -> None:
                 row.update({"Precision@10": precision_k, "Recall@10": recall_k, "NDCG@10": ndcg_k})
 
         matrix = confusion_matrix(y_test, test_predictions, labels=[0, 1])
+        tn,fp,fn,tp=matrix.ravel()
+        row["False positive rate"]=float(fp/(fp+tn))
+        row["False negative rate"]=float(fn/(fn+tp))
         for true_label in (0, 1):
             for predicted_label in (0, 1):
                 confusion_rows.append(
@@ -460,6 +554,7 @@ def run_experiment(args: argparse.Namespace) -> None:
             pd.DataFrame(
                 {
                     ID_COLUMN: test[ID_COLUMN].to_numpy(),
+                    "duplicate_group_id": test["duplicate_group_id"].to_numpy(),
                     "true_label": y_test,
                     "model": model_name,
                     "fraud_probability": test_scores,
@@ -471,6 +566,7 @@ def run_experiment(args: argparse.Namespace) -> None:
         precision_curve, recall_curve, _ = precision_recall_curve(y_test, test_scores)
         pr_curves[model_name] = (recall_curve, precision_curve)
         joblib.dump(model, args.models_dir / safe_model_filename(model_name))
+        (args.models_dir/(safe_model_filename(model_name)+".config.json")).write_text(json.dumps({"selected_C":selected_c,"threshold":threshold,"validation_auprc":ap,"validation_f1":validation_f1,"dataset_sha256":sha256_file(args.data),"split_file":"duplicate_group_membership.csv"},indent=2),encoding="utf-8")
         results.append(row)
 
     results_frame = pd.DataFrame(results)
@@ -482,6 +578,11 @@ def run_experiment(args: argparse.Namespace) -> None:
         "Precision",
         "Recall",
         "F1",
+        "Macro F1",
+        "Selected C",
+        "Validation AUPRC",
+        "False positive rate",
+        "False negative rate",
         "Accuracy",
         "Balanced accuracy",
         "MCC",
@@ -510,9 +611,9 @@ def run_experiment(args: argparse.Namespace) -> None:
     )
     split_ids = pd.concat(
         [
-            train[[ID_COLUMN]].assign(split="train"),
-            validation[[ID_COLUMN]].assign(split="validation"),
-            test[[ID_COLUMN]].assign(split="test"),
+            train[[ID_COLUMN,"duplicate_group_id"]].assign(split="train"),
+            validation[[ID_COLUMN,"duplicate_group_id"]].assign(split="validation"),
+            test[[ID_COLUMN,"duplicate_group_id"]].assign(split="test"),
         ],
         ignore_index=True,
     )
@@ -538,11 +639,15 @@ def run_experiment(args: argparse.Namespace) -> None:
         "removed_empty_rows": clean_report.removed_empty_rows,
         "removed_exact_duplicates": clean_report.removed_same_label_exact_duplicates,
         "removed_conflicting_duplicate_rows": clean_report.removed_conflicting_duplicate_rows,
+        "duplicate_audit": leakage_report,
+        "near_threshold":args.near_threshold,
         "split": {"train": 0.70, "validation": 0.15, "test": 0.15},
         "text_columns": TEXT_COLUMNS,
         "categorical_structured_columns": CATEGORICAL_COLUMNS,
         "binary_structured_columns": BINARY_COLUMNS,
-        "threshold_rule": "Maximise F1 on validation scores; use highest threshold as an exact-F1 tie-break",
+        "threshold_rule": "Maximise F1 on validation only; exact ties choose closest to 0.5 then smaller threshold",
+        "regularisation_grid":[0.1,1,10],
+        "regularisation_selection":"Highest validation AUPRC; exact tie chooses smaller C",
         "model_family": "LogisticRegression(class_weight='balanced', solver='liblinear')",
         "max_tfidf_features": args.max_features,
         "timing_repeats": args.timing_repeats,

@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 evaluation-results.json
 output/
+
+Baseline/.venv/
+Baseline/block1_models_near_duplicate_v1/

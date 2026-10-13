@@ -1,0 +1,36 @@
+{
+  "verification": "PASS",
+  "new_grouped_leakage_gate": {
+    "group_leakage_count": 0,
+    "cross_split_near_pair_count": 0,
+    "cross_split_exact_edge_count": 0,
+    "train_test_near_pair_count": 0,
+    "passed": true
+  },
+  "tests": {
+    "detector": 5,
+    "grouped_split_and_protocol": 4
+  },
+  "file_sha256": {
+    "block1_classification_reports.json": "bb2f0aaee8cf9a6549609b11da74cfd703d70115f79ca641191d161e4267ba43",
+    "block1_confusion_matrices.csv": "188769b5874c5add39fe1ce75826d59d03f8903f4bfee1e092e031efebb14bb6",
+    "block1_missing_report.csv": "15a43372b5a0cf40644d0bae422d87eefc6e109e7345c2b30cc39820565f7eef",
+    "block1_model_comparison.png": "dc230b0918428a0239124534a221288603f24f79ad14e90dc318a5ea8e67aa5c",
+    "block1_model_comparison.svg": "35a74e93093649af2d1d2f680ef5256bddafe5659a958e080cad55b411a47c01",
+    "block1_model_results.csv": "6b2d5d906c79593e7307e2bc0667e096d98f73fd1e2ed187fa7f350f5b6f31cb",
+    "block1_ranking_by_k.csv": "cb929423d13d28432bb9ce19cd886d195bc789a550ae16c09307e703644f5eea",
+    "block1_run_config.json": "8d4998effaa3c00e1ce35bc9be2d178b44345a9a32e6cfe92c4d8b5298e187f6",
+    "block1_split_ids.csv": "4f7d8ac8cc9428fe9cff2f09902824c5c96a694140d5f2c51a92fb89fcd885c1",
+    "block1_split_summary.csv": "b7db584ea61a7f3d435c91dc6132536f848c10923e1cbbf928d812a7b633b073",
+    "block1_test_predictions.csv": "3b3b433fec048ede5420fd6731fa885384c171c7db4d7fd1713816c138833514",
+    "duplicate_group_membership.csv": "2a0f0470ec648fffc4421d952913a50d4b8072fb45475858f105cf64f1b24f9b",
+    "duplicate_group_summary.csv": "1c4a69e3bad938cf96a7f8fcb31dcf6453fefbc3ef7f633557eabc7b415fb29b",
+    "false_positive_false_negative_cases.csv": "d1bb253871fe58e76759562fd1cc5fe05b737ee3a80e7f1224c2fc34415eeb39",
+    "grouped_cross_split_near_duplicates.csv": "afc9c0b3787318ac35f056f82fc8a2d55a78b640eb3c5875e20e845f06ec0000",
+    "leakage_audit.json": "25939f8cb41cbb130e8fed0e4c666034e437d0e6283e2014a12510d9fce9bd63",
+    "legacy_cross_split_near_duplicates.csv": "42c0d5a62595c8e1e1d7ae60769da49343b7f9560319bbc8d94b30b8963c36d3",
+    "near_duplicate_pairs.csv": "e36d154503030ade43872759677ad34e5aeee424d7632008a0c40efa65fe1a7c",
+    "Q12_REPORT.md": "5d63cab9374450ea2dab19be6e150d43ae377b80175f4ee91c1c9573680ec4fa"
+  },
+  "scope": "Historical-data rerun; not independent live-browser or fraud-generalisation evidence."
+}
