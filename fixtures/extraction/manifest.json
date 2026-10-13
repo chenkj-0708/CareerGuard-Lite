@@ -383,5 +383,115 @@
     "public_demo_allowed": true,
     "adjudication_status": "automated conformance expectation",
     "capture_date": "2026-10-13"
+  },
+  {
+    "id": "LinkedIn-reported-public-layout",
+    "source": "https://www.linkedin.com/job",
+    "representation": "LinkedIn-reported-public-layout.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "LinkedIn-signed-in-display-contents",
+    "source": "https://www.linkedin.com/job",
+    "representation": "LinkedIn-signed-in-display-contents.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-malaysia-no-keywords",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-malaysia-no-keywords.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-regional-alternate-selector",
+    "source": "https://ca.indeed.com/job",
+    "representation": "Indeed-regional-alternate-selector.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-selected-job-with-many-schema-cards",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-selected-job-with-many-schema-cards.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-delayed-description",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-delayed-description.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-verification-wall",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-verification-wall.html",
+    "expected_extraction_status": "unavailable",
+    "expected_region": null,
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-reported-react-native-layout",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-reported-react-native-layout.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-description-heading-sibling",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-description-heading-sibling.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-unrelated-react-native-content",
+    "source": "https://malaysia.indeed.com/job",
+    "representation": "Indeed-unrelated-react-native-content.html",
+    "expected_extraction_status": "unavailable",
+    "expected_region": null,
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
   }
 ]

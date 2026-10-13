@@ -69,7 +69,11 @@ async function scan(options = {}) {
       selectedContainer: page.selectedContainer, missingFields: page.missingFields,
       fallbackReason: page.fallbackReason
     }].slice(-500) });
-    throw new Error("Unable to reliably identify the job advertisement content.");
+    const hint = page.fallbackReason === "verification-required"
+      ? " Complete the site's verification in your browser, then scan the loaded job listing."
+      : page.fallbackReason === "description-not-ready"
+        ? " Open a job and wait for its description to load, then try again." : "";
+    throw new Error("Unable to reliably identify the job advertisement content." + hint);
   }
   const scoringStarted = performance.now();
   const baselines = scoreAll(page);

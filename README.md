@@ -55,7 +55,7 @@ npm install --no-save playwright
 npm run test:extraction
 ```
 
-Alternatively set `CG_PLAYWRIGHT` to an existing Playwright package directory. The extraction runner intercepts network responses with synthetic HTML and writes 35 archived representations plus a manifest under `fixtures/extraction`. These establish implementation conformance, not independent risk-classification performance. Existing `fixtures/synthetic` cases likewise are rule-derived regression scenarios.
+Alternatively set `CG_PLAYWRIGHT` to an existing Playwright package directory. The extraction runner intercepts network responses with synthetic HTML and writes 45 archived representations plus a manifest under `fixtures/extraction`. These establish implementation conformance, not independent risk-classification performance. Existing `fixtures/synthetic` cases likewise are rule-derived regression scenarios.
 
 For a manual demo:
 
@@ -76,3 +76,9 @@ python analysis/evaluate.py path/to/careerguard-evaluation.json --output evaluat
 Rule version 1.0.0 preserves existing initial weights and thresholds (30/60). Text indicators, metadata weights and thresholds are separated in `lib/risk-rules.js`; `lib/indicator-catalog.json` documents triggers and evidence sources; keyword evidence accompanies matching text rules. Broad keywords can cause false positives and require validation before a formal freeze. Do not tune these rules against a held-out test set.
 
 The offline EMSCAD experiment is in `../Baseline`, separate from browser metadata and operational tests. Its current split removes exact duplicates, but does not establish protection against near-duplicate leakage. Independent scenario annotations, permitted live-site snapshots, near-duplicate-aware EMSCAD splits, at least two suitable baseline families and a formal benchmark remain research work. No new accuracy or publication claim is made by these fixes.
+
+## LinkedIn and Indeed extraction update
+
+Explicit platform description containers no longer require three English job keywords or restrict description heading counts. LinkedIn public/signed-in descriptions, regional Indeed domains and delayed content are covered by regression tests. The extractor waits up to five seconds for a description to appear; it does not score surrounding search results while the selected description is loading. Reload the extension on the extensions page and refresh existing job tabs after updating. Verification screens still stop scoring and now include a specific instruction.
+
+Indeed React Native viewjob layouts are supported through `.simple-job-description-html` or the HTML container immediately after the platform description heading. The reported TVET/Certification Program page was directly inspected and its bounded extraction gate verified; the old whole-page fallback remains disabled.

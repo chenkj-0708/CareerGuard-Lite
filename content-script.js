@@ -1,17 +1,22 @@
 (() => {
-  if (globalThis.__careerGuardInstalled) return;
-  globalThis.__careerGuardInstalled = true;
+  // Re-injection replaces the previous extractor, including after an extension update.
+  if (globalThis.__careerGuardExtractListener) {
+    chrome.runtime.onMessage.removeListener(globalThis.__careerGuardExtractListener);
+  }
 
   const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
   const visible = (element) => {
-    const style = getComputedStyle(element);
-    const rect = element.getBoundingClientRect();
-    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    for (let node = element; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (node.hidden || style.display === "none" || style.visibility === "hidden" || style.contentVisibility === "hidden") return false;
+    }
+    const hasBox = node => [...node.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+    return hasBox(element) || (getComputedStyle(element).display === "contents" && [...element.children].some(hasBox));
   };
 
   function detectSite(domain) {
     if (/(^|\.)jobstreet\.(com|com\.my|com\.sg)$/.test(domain)) return "JobStreet";
-    if (/(^|\.)indeed\.(com|co\.uk)$/.test(domain)) return "Indeed";
+    if (/(^|\.)indeed\.(com|co\.uk|ca|com\.au|de|fr|co\.in|co\.jp|nl|es|it|ch|ie|co\.nz|com\.br|com\.mx)$/.test(domain)) return "Indeed";
     if (/(^|\.)linkedin\.com$/.test(domain)) return "LinkedIn";
     return "Generic";
   }
@@ -19,9 +24,32 @@
   function bestListingRoot(siteType) {
     const siteSelectors = {
       JobStreet: ["[data-automation='jobAdDetails']", "[data-automation='jobDescription']"],
-      Indeed: ["#jobDescriptionText"],
-      LinkedIn: [".jobs-description__content", ".show-more-less-html__markup"]
+      Indeed: ["#jobDescriptionText", "[data-testid='jobDescriptionText']", "[data-testid='job-description']", ".jobsearch-JobComponent-description", ".simple-job-description-html", "[data-testid='vj-job-description-heading'] + .react-native-html-content"],
+      LinkedIn: [".jobs-description-content__text", ".jobs-description__content", ".jobs-box__html-content", ".description__text .show-more-less-html__markup", ".description__text", "[data-testid='job-details-about-job-module']"]
     };
+    // A platform's explicit description identifies the selected job, even on a
+    // search page containing many cards or unrelated JobPosting JSON objects.
+    const siteMatches = [...new Set((siteSelectors[siteType] || []).flatMap(selector => [...document.querySelectorAll(selector)]))]
+      .filter(element => visible(element) && normalize(element.innerText).length >= 150);
+    const siteCandidates = siteMatches.filter(element => !siteMatches.some(other => other !== element && element.contains(other)));
+    if (siteCandidates.length > 1) return { reason: "multiple-listing-containers" };
+    if (siteCandidates.length === 1) {
+      const element = siteCandidates[0];
+      if (normalize(element.innerText).length <= 30000) {
+        return { element, strategy: "site-specific", selector: siteSelectors[siteType].find(selector => element.matches(selector)) };
+      }
+      return { reason: "description-exceeds-bound" };
+    }
+    if (["Indeed", "LinkedIn"].includes(siteType)) {
+      const verificationHeading = [...document.querySelectorAll("h1")]
+        .find(element => visible(element) && /additional verification required|verify (?:you are|you're) human/i.test(element.innerText));
+      if (verificationHeading) return { reason: "verification-required" };
+      // Never replace a still-loading selected description with the surrounding
+      // search results, recommendations or other jobs on the same page.
+      if (siteSelectors[siteType].some(selector => [...document.querySelectorAll(selector)].some(visible))) {
+        return { reason: "description-not-ready" };
+      }
+    }
     const structuredJobs = [];
     const visit = value => {
       if (!value || typeof value !== "object") return;
@@ -48,7 +76,6 @@
       }
     }
     const groups = [
-      ["site-specific", siteSelectors[siteType] || []],
       ["jobposting", ["[itemtype*='JobPosting']"]],
       ["job-description", [".job-description", "#job-description", "[data-testid='job-description']"]],
       ["bounded-generic", ["main", "article", "[role='main']"]]
@@ -92,8 +119,14 @@
     const visibleText = selection.description || normalize(clean.textContent).slice(0, 30000);
     if (visibleText.length < 150) return { extractionStatus: "unavailable", fallbackReason: "insufficient-visible-description" };
     const pageText = visibleText;
+    const siteHeadingSelectors = {
+      LinkedIn: ".job-details-jobs-unified-top-card__job-title h1, .jobs-unified-top-card__job-title, .top-card-layout__title",
+      Indeed: ".jobsearch-JobInfoHeader-title, [data-testid='jobsearch-JobInfoHeader-title'], [data-testid='company-info-title-row'] h5, [data-testid='company-info-title-row'] h1"
+    };
+    const siteHeading = siteHeadingSelectors[siteType]
+      ? [...document.querySelectorAll(siteHeadingSelectors[siteType])].find(visible) : null;
     const heading = [...root.querySelectorAll("h1")].find(visible);
-    const title = normalize(selection.job?.title || heading?.innerText || document.title);
+    const title = normalize(selection.job?.title || siteHeading?.innerText || heading?.innerText || document.title);
     const links = [...root.querySelectorAll("a[href]")]
       .filter(link => visible(link) && !link.closest("nav, footer, aside, [role='navigation'], [role='dialog']"))
       .map((link) => link.href)
@@ -147,7 +180,26 @@
     };
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === "CG_EXTRACT") sendResponse({ ok: true, page: extractPage() });
-  });
+  async function extractWhenReady(waitForContent) {
+    const started = performance.now();
+    const deadline = started + (waitForContent ? 5000 : 0);
+    let page = extractPage();
+    while (page.extractionStatus !== "reliable" && performance.now() < deadline &&
+           page.fallbackReason !== "multiple-listing-containers" && page.fallbackReason !== "multiple-structured-listings") {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      page = extractPage();
+    }
+    page.extractionLatencyMs = Number((performance.now() - started).toFixed(2));
+    return page;
+  }
+
+  const listener = (message, _sender, sendResponse) => {
+    if (message.type !== "CG_EXTRACT") return;
+    extractWhenReady(message.waitForContent !== false)
+      .then(page => sendResponse({ ok: true, page }))
+      .catch(() => sendResponse({ ok: false, error: "The listing could not be extracted." }));
+    return true;
+  };
+  globalThis.__careerGuardExtractListener = listener;
+  chrome.runtime.onMessage.addListener(listener);
 })();
