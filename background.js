@@ -30,26 +30,26 @@ async function ensureContentScript(tabId) {
 }
 
 async function backendVerify(page, localResult, backendUrl) {
-  const response = await fetch(`${backendUrl.replace(/\/$/, "")}/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  if (backendUrl !== DEFAULTS.backendUrl) throw new Error("Only the configured localhost verifier is allowed.");
+  const health = await fetch(`${backendUrl}/health`, { signal: AbortSignal.timeout(3000) });
+  if (!health.ok) throw new Error("Backend unavailable.");
+  const { token } = await health.json();
+  const requestId = crypto.randomUUID();
+  const response = await fetch(`${backendUrl}/verify`, {
+    method: "POST", signal: AbortSignal.timeout(15000),
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
     body: JSON.stringify({
-      schemaVersion: 1,
-      scenarioId: crypto.randomUUID(),
-      pageUrl: page.url,
-      pageTitle: page.title,
-      pageDomain: page.domain,
-      applicationLinks: page.applicationLinks,
-      externalLinks: page.externalLinks,
-      emails: page.emails,
-      contactCues: page.contactCues,
-      textExcerpt: page.visibleText.slice(0, 5000),
-      localScore: localResult.score,
-      localTier: localResult.tier
+      request_id: requestId, timestamp: Date.now() / 1000, nonce: crypto.randomUUID(),
+      company_domain: page.companyDomain || "",
+      contact_domain: [...new Set((page.emails || []).map(email => email.split("@").pop()))].length === 1
+        ? page.emails[0].split("@").pop() : "",
+      requested_checks: ["rdap_domain_registration", "website_reachable", "contact_domain_match"]
     })
   });
   if (!response.ok) throw new Error(`Backend verification failed (${response.status}).`);
-  return response.json();
+  const result = await response.json();
+  if (result.request_id !== requestId) throw new Error("Mismatched corroboration response.");
+  return result;
 }
 
 async function scan(options = {}) {
@@ -61,6 +61,16 @@ async function scan(options = {}) {
   if (!extracted?.ok) throw new Error("The listing could not be extracted.");
 
   const page = extracted.page;
+  if (page.extractionStatus !== "reliable") {
+    const { extractionFailures = [] } = await storageGet(["extractionFailures"]);
+    await storageSet({ lastScan: null, extractionFailures: [...extractionFailures, {
+      createdAt: new Date().toISOString(), domain: page.domain, siteType: page.siteType,
+      extractionStatus: page.extractionStatus, extractionStrategy: page.extractionStrategy,
+      selectedContainer: page.selectedContainer, missingFields: page.missingFields,
+      fallbackReason: page.fallbackReason
+    }].slice(-500) });
+    throw new Error("Unable to reliably identify the job advertisement content.");
+  }
   const scoringStarted = performance.now();
   const baselines = scoreAll(page);
   const localScoringLatencyMs = Number((performance.now() - scoringStarted).toFixed(2));
@@ -95,6 +105,9 @@ async function scan(options = {}) {
       title: page.title,
       pageStatus: page.pageStatus,
       extractionQuality: page.extractionQuality,
+      siteType: page.siteType, extractionStatus: page.extractionStatus,
+      extractionStrategy: page.extractionStrategy, selectedContainer: page.selectedContainer,
+      missingFields: page.missingFields, fallbackReason: page.fallbackReason,
       extractionLatencyMs: page.extractionLatencyMs,
       signalCounts: {
         visibleTextCharacters: page.visibleText.length,

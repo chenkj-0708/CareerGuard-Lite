@@ -9,7 +9,9 @@ function render(record) {
   elements.result.innerHTML = `
     <h2>CareerGuard risk result</h2>
     <div><span class="score ${result.tier}">${result.score}</span> / 100 · <span class="tier ${result.tier}">${result.tier} concern</span></div>
-    <small>Confidence cue ${result.confidence}% · ${record.totalLatencyMs} ms</small>${reasons}${backend}`;
+    <small>Confidence cue ${result.confidence}% · ${record.totalLatencyMs} ms</small><h3>Local evidence</h3>${reasons}<h3>External corroboration</h3>${backend}
+    ${(result.backend ? Object.entries(result.backend.checks).map(([name, check]) => `<p>${escapeHtml(name)}: ${escapeHtml(check.status)}</p>`).join("") : "<p>Not requested or unavailable.</p>")}
+    <h3>Recommended action</h3><p>${result.tier === "low" ? "Verify the employer independently before sharing sensitive information." : "Do not make payment. Verify the employer through an independent official channel before continuing."}</p>`;
   elements.result.hidden = false;
 }
 
@@ -29,8 +31,10 @@ async function scan() {
   elements.status.textContent = "Reading and assessing this page…";
   elements.result.hidden = true;
   const options = { mode: "multiSignal", showReasons: true, autoEscalate: true };
-  const response = await chrome.runtime.sendMessage({ type: "CG_SCAN", options });
-  elements.scan.disabled = false;
+  let response;
+  try { response = await chrome.runtime.sendMessage({ type: "CG_SCAN", options }); }
+  catch (error) { response = { ok: false, error: error.message }; }
+  finally { elements.scan.disabled = false; }
   if (!response?.ok) {
     elements.status.textContent = response?.error || "The page could not be scanned.";
     return;

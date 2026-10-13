@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/scoring.test.mjs && node tests/synthetic-fixtures.test.mjs"
+    "test": "node tests/scoring.test.mjs && node tests/synthetic-fixtures.test.mjs && node tests/workflow.test.mjs",
+    "test:extraction": "node tests/extraction.test.mjs",
+    "test:backend": "python -m unittest discover -s tests"
   }
 }

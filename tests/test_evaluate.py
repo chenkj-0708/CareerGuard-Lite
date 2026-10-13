@@ -1,6 +1,6 @@
 import unittest
 
-from extension.analysis.evaluate import evaluate
+from analysis.evaluate import evaluate
 
 
 def record(truth, text, metadata, multi, full=None, condition="score-only", decision=None):

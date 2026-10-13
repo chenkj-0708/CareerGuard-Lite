@@ -1,88 +1,87 @@
-"""Privacy-bounded deterministic checks for selectively escalated listings."""
-
-from __future__ import annotations
-
-import hashlib
-import re
+"""External evidence only. Never computes or modifies browser risk scores."""
+import http.client
+import ipaddress
+import json
+import socket
+import ssl
 import time
-from dataclasses import dataclass, field
-from urllib.parse import urlparse
+from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
-SHORTENERS = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "cutt.ly", "rb.gy"}
-FREE_EMAIL = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "proton.me", "protonmail.com"}
-COMPOUND_SUFFIXES = {"com.my", "com.sg", "com.au", "co.uk", "co.nz", "co.jp"}
+CHECKS = {"rdap_domain_registration", "website_reachable", "contact_domain_match"}
 
 
-def domain_of(value: str) -> str:
-    return (urlparse(value).hostname or "").lower().removeprefix("www.")
+def public_addresses(domain):
+    addresses = {item[4][0] for item in socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)}
+    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise ValueError("Non-public destination")
+    return addresses
 
 
-def root_domain(domain: str) -> str:
-    parts = [part for part in domain.split(".") if part]
-    if len(parts) <= 2:
-        return domain
-    tail = ".".join(parts[-2:])
-    return ".".join(parts[-3:]) if tail in COMPOUND_SUFFIXES else tail
+def public_get(url, redirects=0):
+    """Pin the connection to a checked public IP; validate every RDAP redirect."""
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.port not in (None, 443) or parsed.username:
+        raise ValueError("HTTPS public destinations required")
+    address = sorted(public_addresses(parsed.hostname))[0]
+    conn = http.client.HTTPSConnection(parsed.hostname, timeout=3)
+    raw = socket.create_connection((address, 443), timeout=3)
+    conn.sock = ssl.create_default_context().wrap_socket(raw, server_hostname=parsed.hostname)
+    try:
+        conn.request("GET", parsed.path or "/", headers={"Accept": "application/rdap+json, application/json", "User-Agent": "CareerGuard-Lite/0.2"})
+        response = conn.getresponse()
+        if response.status in (301, 302, 303, 307, 308) and redirects < 3:
+            from urllib.parse import urljoin
+            return public_get(urljoin(url, response.getheader("Location", "")), redirects + 1)
+        body = response.read(256001)
+        if len(body) > 256000:
+            raise ValueError("External response too large")
+        return response.status, body
+    finally:
+        conn.close()
 
 
-def reason(identifier: str, points: int, message: str) -> dict:
-    return {"id": identifier, "points": points, "message": message, "source": "backend"}
-
-
-@dataclass
 class VerificationEngine:
-    """In-memory verifier; stores fingerprints and source domains, never raw listing text."""
+    def __init__(self, fetch=public_get):
+        self.fetch = fetch
 
-    fingerprint_sources: dict[str, set[str]] = field(default_factory=dict)
-
-    def verify(self, payload: dict) -> dict:
-        started = time.perf_counter()
-        page_domain = domain_of(payload.get("pageUrl", "")) or payload.get("pageDomain", "")
-        page_root = root_domain(page_domain)
-        application_domains = [domain_of(value) for value in payload.get("applicationLinks", [])]
-        application_domains = [value for value in application_domains if value]
-        text = str(payload.get("textExcerpt", ""))[:5000]
-        emails = [str(value).lower() for value in payload.get("emails", [])]
-        reasons: list[dict] = []
-        score = 5
-
-        unrelated = sorted({value for value in application_domains if root_domain(value) != page_root})
-        if unrelated:
-            score += 22
-            reasons.append(reason("backend_domain_mismatch", 22, "Backend verification found an application-domain mismatch."))
-        if any(value in SHORTENERS for value in application_domains):
-            score += 25
-            reasons.append(reason("backend_shortened_link", 25, "A shortened application link hides the final destination."))
-        if any(email.rsplit("@", 1)[-1] in FREE_EMAIL for email in emails if "@" in email):
-            score += 12
-            reasons.append(reason("backend_free_email", 12, "Recruitment contact uses a public email provider."))
-        if re.search(r"\b(payment|deposit|fee|gift card|cryptocurrency|bank account|otp)\b", text, re.I):
-            score += 25
-            reasons.append(reason("backend_high_risk_request", 25, "Deeper text checks found a payment or sensitive-information request."))
-
-        normalized = re.sub(r"\W+", " ", text.lower()).strip()
-        fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest() if normalized else ""
-        if fingerprint:
-            sources = self.fingerprint_sources.setdefault(fingerprint, set())
-            sources.add(page_root)
-            if len(sources) >= 3:
-                score += 18
-                reasons.append(reason("cross_domain_duplicate", 18, "The same listing text was observed across several unrelated domains."))
-
-        score = min(100, score)
-        tier = "elevated" if score >= 60 else "uncertain" if score >= 30 else "low"
-        confidence = min(95, 55 + len(reasons) * 10)
-        return {
-            "schemaVersion": 1,
-            "score": score,
-            "tier": tier,
-            "confidence": confidence,
-            "reasons": reasons,
-            "checks": {
-                "applicationDomains": application_domains,
-                "unrelatedApplicationDomains": unrelated,
-                "duplicateSourceCount": len(self.fingerprint_sources.get(fingerprint, set())) if fingerprint else 0,
-            },
-            "dataRetention": "Only a SHA-256 text fingerprint and source domain are retained in memory.",
-            "latencyMs": round((time.perf_counter() - started) * 1000, 2),
-        }
+    def verify(self, payload):
+        start = time.perf_counter()
+        domain = payload["company_domain"]
+        contact = payload["contact_domain"]
+        checks = {}
+        for name in payload["requested_checks"]:
+            began = time.perf_counter()
+            error_type = None
+            try:
+                if not domain or (name == "contact_domain_match" and not contact):
+                    value = {"status": "inconclusive", "reason": "missing-domain-evidence"}
+                elif name == "contact_domain_match":
+                    matches = contact == domain or contact.endswith("." + domain) or domain.endswith("." + contact)
+                    value = {"status": "supported" if matches else "contradicted"}
+                elif name == "website_reachable":
+                    status, _ = self.fetch("https://" + domain + "/")
+                    value = {"status": "supported" if 200 <= status < 400 else "unavailable", "http_status": status}
+                else:
+                    status, body = self.fetch("https://rdap.org/domain/" + domain)
+                    if status == 404:
+                        value = {"status": "contradicted", "registered": False}
+                    elif status == 200:
+                        data = json.loads(body)
+                        if data.get("objectClassName") != "domain":
+                            raise ValueError("Invalid RDAP domain response")
+                        value = {"status": "supported", "registered": True, "domain_status": data.get("status", [])}
+                        event = next((e for e in data.get("events", []) if e.get("eventAction") == "registration"), None)
+                        if event:
+                            date = datetime.fromisoformat(event["eventDate"].replace("Z", "+00:00"))
+                            value["registration_date"] = event["eventDate"]
+                            value["domain_age_days"] = max(0, (datetime.now(timezone.utc) - date).days)
+                        value["registrar"] = next((e.get("handle") for e in data.get("entities", []) if "registrar" in e.get("roles", [])), None)
+                    else:
+                        value = {"status": "unavailable", "http_status": status}
+            except Exception as error:
+                error_type = type(error).__name__
+                value = {"status": "unavailable", "error_type": error_type}
+            checks[name] = value
+            print(json.dumps({"request_id": payload["request_id"], "timestamp": datetime.now(timezone.utc).isoformat(), "check_type": name, "status": value["status"], "response_time_ms": round((time.perf_counter()-began)*1000, 2), "error_type": error_type}))
+        return {"schemaVersion": 2, "request_id": payload["request_id"], "checks": checks, "latencyMs": round((time.perf_counter()-start)*1000, 2)}

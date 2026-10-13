@@ -18,7 +18,15 @@ assert.equal(safeScores.textOnly.tier, "low");
 assert.ok(riskyScores.textOnly.score > safeScores.textOnly.score);
 assert.ok(riskyScores.metadataOnly.score > safeScores.metadataOnly.score);
 assert.ok(riskyScores.multiSignal.score >= 60);
-const full = combineBackend(riskyScores.multiSignal, { score: 90, confidence: 90, reasons: [{ id: "backend", points: 20, message: "Backend evidence", source: "backend" }] });
+const local = riskyScores.multiSignal;
+const full = combineBackend(local, { schemaVersion: 2, score: 100, tier: "low", confidence: 0,
+  checks: { contact_domain_match: { status: "contradicted" } } });
 assert.equal(full.model, "full-workflow");
-assert.ok(full.score >= riskyScores.multiSignal.score);
-console.log("scoring tests passed");
+assert.equal(full.score, local.score);
+assert.equal(full.tier, local.tier);
+assert.equal(full.confidence, local.confidence);
+assert.deepEqual(full.reasons, local.reasons);
+assert.throws(() => combineBackend(local, { score: 0 }));
+assert.throws(() => combineBackend(local, { schemaVersion: 2, checks: { x: { status: "safe" } } }));
+assert.throws(() => scoreAll({ ...safe, extractionStatus: "unavailable" }));
+console.log("scoring and authority tests passed");
