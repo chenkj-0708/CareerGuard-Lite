@@ -1,6 +1,6 @@
 import unittest
 
-from extension.analysis.evaluate import evaluate
+from analysis.evaluate import evaluate
 
 
 def record(truth, text, metadata, multi, full=None, condition="score-only", decision=None):
@@ -28,7 +28,7 @@ class EvaluateTests(unittest.TestCase):
         ]}
         result = evaluate(payload, 2)
         self.assertEqual(result["models"]["multi-signal"]["three_class_accuracy"], 1.0)
-        self.assertEqual(result["models"]["multi-signal"]["precision_at_2"], 0.5)
+        self.assertEqual(result["rq1"]["status"], "Inconclusive")
         self.assertEqual(result["interface_study"]["explanation"]["agreement_with_ground_truth"], 1.0)
 
 

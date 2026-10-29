@@ -1,0 +1,13 @@
+Model,True label,Predicted label,Count
+Text-only baseline,0,0,2491
+Text-only baseline,0,1,12
+Text-only baseline,1,0,42
+Text-only baseline,1,1,86
+Structured-only baseline,0,0,2337
+Structured-only baseline,0,1,166
+Structured-only baseline,1,0,34
+Structured-only baseline,1,1,94
+Combined text + structured,0,0,2471
+Combined text + structured,0,1,32
+Combined text + structured,1,0,31
+Combined text + structured,1,1,97

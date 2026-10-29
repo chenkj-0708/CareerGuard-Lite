@@ -1,0 +1,4 @@
+split,rows,independent_groups,real,fake,fake_percent
+train,12292,9105,11691,601,4.89
+validation,2631,1978,2504,127,4.83
+test,2631,1977,2503,128,4.87

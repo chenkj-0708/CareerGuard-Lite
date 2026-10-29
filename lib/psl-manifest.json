@@ -1,0 +1,6 @@
+{
+  "source": "https://publicsuffix.org/list/public_suffix_list.dat",
+  "version": "2026-10-07_07-28-19_UTC",
+  "sha256": "ba7d836c0ea57a8bcf9f1fcb868066a7554bed029b441ecc6204ad8494a32612",
+  "include_private": true
+}

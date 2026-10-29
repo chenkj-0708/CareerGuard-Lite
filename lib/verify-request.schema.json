@@ -1,0 +1,38 @@
+{
+  "title": "VerifyRequest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requestId",
+    "schemaVersion",
+    "scenarioOrScanId",
+    "excerptHash",
+    "hashContractVersion",
+    "capabilityToken"
+  ],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{16,80}$"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "scenarioOrScanId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{16,80}$"
+    },
+    "excerptHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "hashContractVersion": {
+      "const": "HashNormalise-CORR-v1"
+    },
+    "capabilityToken": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43
+    }
+  }
+}
