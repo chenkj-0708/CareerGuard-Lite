@@ -5,6 +5,20 @@
   }
 
   const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  // Text, identity fields and links share one exclusion boundary. Use explicit
+  // regions rather than matching words such as "ad" in job-description text.
+  const excludedRegions = "nav, footer, aside, script, style, iframe, [role='navigation'], [role='dialog'], .advertisement, .adsbygoogle, [data-ad-slot], [data-ad-client]";
+  const included = element => visible(element) && !element.closest(excludedRegions);
+  function cleanListing(root) {
+    const originalNodes = [...root.querySelectorAll("*")];
+    const clean = root.cloneNode(true);
+    const cleanNodes = [...clean.querySelectorAll("*")];
+    originalNodes.forEach((node, index) => {
+      if (!included(node)) cleanNodes[index]?.remove();
+    });
+    clean.querySelectorAll("p, div, section, li, h1, h2, h3").forEach(node => node.append(" "));
+    return clean;
+  }
   const visible = (element) => {
     for (let node = element; node; node = node.parentElement) {
       const style = getComputedStyle(node);
@@ -30,7 +44,7 @@
     // A platform's explicit description identifies the selected job, even on a
     // search page containing many cards or unrelated JobPosting JSON objects.
     const siteMatches = [...new Set((siteSelectors[siteType] || []).flatMap(selector => [...document.querySelectorAll(selector)]))]
-      .filter(element => visible(element) && normalize(element.innerText).length >= 150);
+      .filter(element => included(element) && normalize(element.innerText).length >= 150);
     const siteCandidates = siteMatches.filter(element => !siteMatches.some(other => other !== element && element.contains(other)));
     if (siteCandidates.length > 1) return { reason: "multiple-listing-containers" };
     if (siteCandidates.length === 1) {
@@ -62,12 +76,12 @@
       const job = structuredJobs[0];
       const template = document.createElement("template");
       template.innerHTML = typeof job.description === "string" ? job.description : "";
-      template.content.querySelectorAll("script, style, iframe").forEach(node => node.remove());
+      template.content.querySelectorAll(excludedRegions).forEach(node => node.remove());
       const description = normalize(template.content.textContent);
-      const visibleRoots = [...document.querySelectorAll("main, article, [role='main']")].filter(visible);
+      const visibleRoots = [...document.querySelectorAll("main, article, [role='main']")].filter(included);
       if (description.length >= 150 && job.title &&
-          visibleRoots.some(root => normalize(root.innerText).includes(description))) {
-        return { element: visibleRoots.find(root => normalize(root.innerText).includes(description)),
+          visibleRoots.some(root => normalize(cleanListing(root).textContent).includes(description))) {
+        return { element: visibleRoots.find(root => normalize(cleanListing(root).textContent).includes(description)),
           strategy: "schema.org-jobposting", selector: 'script[type="application/ld+json"]',
           description, job };
       }
@@ -79,15 +93,16 @@
     ];
     for (const [strategy, selectors] of groups) {
       const matches = [...new Set(selectors.flatMap(selector => [...document.querySelectorAll(selector)]))]
-        .filter(element => visible(element) && normalize(element.innerText).length >= 150);
+        .filter(element => included(element) && normalize(element.innerText).length >= 150);
       const candidates = matches.filter(element => !matches.some(other => other !== element && element.contains(other)));
       if (candidates.length > 1) return { reason: "multiple-listing-containers" };
       if (candidates.length === 1) {
         const element = candidates[0];
-        const headings = element.querySelectorAll("h1");
-        const text = normalize(element.innerText);
+        const clean = cleanListing(element);
+        const headings = clean.querySelectorAll("h1");
+        const text = normalize(clean.textContent);
         const terms = (text.match(/\b(job|role|vacancy|position|responsibilities|requirements|apply|salary|employment)\b/gi) || []).length;
-        if (headings.length > 1 || element.querySelectorAll("[itemtype*='JobPosting']").length > 1) return { reason: "multiple-listings" };
+        if (headings.length > 1 || clean.querySelectorAll("[itemtype*='JobPosting']").length > 1) return { reason: "multiple-listings" };
         if (terms < 3) continue;
         return { element, job: structuredJobs[0], strategy, selector: selectors.find(selector => element.matches(selector)) };
       }
@@ -113,14 +128,7 @@
       fallbackReason: reason, pageStatus: "unsupported"
     });
     if (!root) return failure(selection.reason);
-    // Only retain nodes that are visible in the original subtree.
-    const originalNodes = [...root.querySelectorAll("*")];
-    const clean = root.cloneNode(true);
-    const cleanNodes = [...clean.querySelectorAll("*")];
-    originalNodes.forEach((node, index) => {
-      if (!visible(node) || node.matches("nav, footer, aside, script, style, [role='navigation'], [role='dialog'], .advertisement")) cleanNodes[index]?.remove();
-    });
-    clean.querySelectorAll("p, div, section, li, h1, h2, h3").forEach(node => node.append(" "));
+    const clean = cleanListing(root);
     const fullVisibleText = selection.description || normalize(clean.textContent);
     const visibleText = Array.from(fullVisibleText).slice(0, 30000).join("");
     if (visibleText.length < 150) return failure("insufficient-visible-description");
@@ -130,11 +138,11 @@
       Indeed: ".jobsearch-JobInfoHeader-title, [data-testid='jobsearch-JobInfoHeader-title'], [data-testid='company-info-title-row'] h5, [data-testid='company-info-title-row'] h1"
     };
     const siteHeading = siteHeadingSelectors[siteType]
-      ? [...document.querySelectorAll(siteHeadingSelectors[siteType])].find(visible) : null;
-    const heading = [...root.querySelectorAll("h1")].find(visible);
+      ? [...document.querySelectorAll(siteHeadingSelectors[siteType])].find(included) : null;
+    const heading = [...root.querySelectorAll("h1")].find(included);
     const title = normalize(selection.job?.title || siteHeading?.innerText || heading?.innerText || document.title);
     const links = [...root.querySelectorAll("a[href]")]
-      .filter(link => visible(link) && !link.closest("nav, footer, aside, [role='navigation'], [role='dialog']"))
+      .filter(included)
       .map((link) => link.href)
       .filter((href) => /^https?:/i.test(href));
     const allLinks = [...new Set(links)];
@@ -151,7 +159,7 @@
       catch { return false; }
     });
     const applicationLinks = [...root.querySelectorAll("a[href]")]
-      .filter(link => visible(link) && !link.closest("nav, footer, aside, [role='navigation'], [role='dialog']"))
+      .filter(included)
       .filter((link) => /apply|application|submit|register/i.test(`${link.innerText} ${link.getAttribute("aria-label") || ""}`))
       .map((link) => link.href)
       .filter((href) => /^https?:/i.test(href));
@@ -162,7 +170,7 @@
     const extractionQuality = Number(Math.min(1, (visibleText.length / 1200) * 0.65 + Math.min(jobTerms, 8) / 8 * 0.35).toFixed(3));
     const status = "scoreable";
 
-    const fullCompanyText = normalize(selection.job?.hiringOrganization?.name || root.querySelector("[class*='company'], [data-testid*='company']")?.textContent);
+    const fullCompanyText = normalize(selection.job?.hiringOrganization?.name || clean.querySelector("[class*='company'], [data-testid*='company']")?.textContent);
     const companyText = Array.from(fullCompanyText).slice(0, 500).join("");
     return {
       schemaVersion: 1, scanId,

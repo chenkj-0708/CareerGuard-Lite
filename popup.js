@@ -31,6 +31,8 @@ async function scan() {
   elements.status.textContent = "Reading and assessing this page…";
   elements.result.hidden = true;
   const options = { mode: "multiSignal", showReasons: true, autoEscalate: true };
+  const caseId=elements.caseId.value.trim();
+  if(caseId)options.scenarioId=caseId;
   let response;
   try { response = await chrome.runtime.sendMessage({ type: "CG_SCAN", options }); }
   catch (error) { response = { ok: false, error: error.message }; }
@@ -39,7 +41,7 @@ async function scan() {
     elements.status.textContent = response?.error || "The page could not be scanned.";
     return;
   }
-  elements.status.textContent = `Captured as ${response.record.page.pageStatus}.`;
+  elements.status.textContent = `Case ${response.record.scenarioId}: ${response.record.page.pageStatus}.`;
   render(response.record);
 }
 

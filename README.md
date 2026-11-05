@@ -1,6 +1,6 @@
 # CareerGuard Lite 0.2.0
 
-This implementation follows the formal contracts in `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`, Chapters 3 and 4. It is an advisory research prototype, not a calibrated fraud classifier. The earlier domain/RDAP verifier is superseded by the thesis hash-only, read-only corroboration design.
+This implementation follows the formal contracts in `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`, Chapters 3 and 4. It is an advisory research prototype, not a calibrated fraud classifier. The backend provides hash-only, read-only duplicate corroboration.
 
 ## Run
 
@@ -16,9 +16,11 @@ An authorised index is optional for local operation. To enable actual duplicate 
 python backend/server.py --allowed-origin chrome-extension://YOUR_32_CHARACTER_EXTENSION_ID --index-manifest path/to/authorised-manifest.json
 ```
 
-An absent index returns unavailable. No real authorised index has been fabricated or shipped. The server validates the permission/source/construction/contamination manifest, index checksum and matching PSL/hash contracts. It loads a fixed snapshot, never inserts queried advertisements and performs no RDAP, reputation or other outbound lookup.
+An absent index returns unavailable. No real authorised index has been fabricated or shipped. The server validates the permission/source/construction/contamination manifest, index checksum and matching PSL/hash contracts. It loads a fixed snapshot, never inserts queried advertisements and performs no outbound lookup.
 
 After updating, reload the extension and refresh existing job tabs. LinkedIn, JobStreet and Indeed (including the observed React Native viewjob layout) use bounded description selectors. Other pages use bounded, single-listing extraction. Unsupported/ambiguous content produces a limitation state and no score.
+
+Text, company fields and links share the same excluded-region boundary. Navigation, dialogs, sidebars, iframes and explicitly marked advertising regions (`.advertisement`, `.adsbygoogle`, `[data-ad-slot]`, `[data-ad-client]`) cannot supply scoring text or application links. Ordinary job content about advertising and legitimate employer application links are retained. Unmarked or unfamiliar advertising layouts still require independent page coverage checks.
 
 ## Formal scoring
 
@@ -39,6 +41,8 @@ The UI shows ExtractionSufficiency and TierBoundaryDistance rather than a fabric
 ## PageSignal v1 and domains
 
 `lib/page-signal.js` validates the runtime object and `lib/page-signal.schema.json` documents fields. The root/status/confidence enumerations and fallback/truncation flags are explicit. Raw email addresses are reduced to `emailProvider` domains. URL parsing canonicalises the host; persisted references remove query and fragment. Title fallbacks and all text/link truncation are recorded. Transient visible text is capped at 30,000 Unicode code points, company text at 500, links at 100 and application links at 20.
+
+Validation runs before scoring. Required capture/diagnostic fields, UTC timestamps, boolean flags, HTTP(S) links, field limits, provider/contact categories and success/failure state consistency are checked. Invalid objects stop the scan and are logged as `INVALID_PAGE_SIGNAL`, with a safe `validationCode` and `validationField`; neither raw bad values nor exception stacks are logged. Valid unavailable extraction remains a separate safe-stop state. Missing company text is allowed when explicitly declared in `missingFields`; missing or too-short listing content is not scoreable. JSON Schema documents the structural contract; runtime validation also checks cross-field calculations and URL consistency.
 
 The official PSL snapshot includes ICANN and PRIVATE sections, wildcard and exception rules. `lib/psl-manifest.json` records its version and checksum. Browser and Python index loading share this exact snapshot. Rebuild the JS module deterministically with `python scripts/build_psl.py`; changing the snapshot requires new manifests and affected conformance evidence.
 
@@ -93,3 +97,15 @@ npm run test:extraction
 Set `CG_PLAYWRIGHT` to an existing Playwright package directory if needed. Forty original rule-derived scenarios and the extraction representations are functional regression fixtures, not independent performance evidence; their old risk labels belong to the retired configuration and were not retuned to improve thesis results.
 
 History retains at most 500 records and 30 days; lastScan expires after 24 hours. Stored outputs omit raw descriptions and matched text excerpts. Extraction failures are exported separately. Backend access logs contain bounded status/request IDs only; stdout storage is controlled by the operator, who must apply the thesis seven-day log retention requirement. No real held-out benchmark or annotation/index authorization is claimed by passing software tests. See CONFORMANCE.md for source mappings, explicit finalisation choices and remaining independent research gates.
+
+Every failed scan attempt is recorded in the JSON export's `extractionFailures` array, including tab access, unsupported pages, injection, extraction, validation, scoring and result-saving failures. Each record includes an attempt ID, start/failure timestamps, a bounded failure code/reason, pipeline stage and total elapsed milliseconds, plus available scenario/configuration references. Raw exception messages, stack traces and page content are not stored. Failure writes are serialized and follow the existing 500-record/30-day retention. If local storage is unavailable, the user is explicitly told that the failure record could not be saved. Backend unavailability remains a separate status on a successful local scan.
+
+### Scan success and speed
+
+Registered research pages and manually supplied reference labels can be managed in the dashboard's **Test pages and human answers** form. Matching scans inherit the case ID/group/split, while labels remain separate from prediction and are joined only for display/export. Late labels, unknown IDs, ambiguous URLs and conflicts are explicit. See [TEST_PAGE_GUIDE.md](TEST_PAGE_GUIDE.md) for the step-by-step workflow. This records single-researcher references without inventing independent annotators or bypassing formal RQ1 gates.
+
+The dashboard and JSON export report distinct page cases, successful/failed cases, scan attempts and retries. Automatic scenario IDs are SHA-256 hashes of the page URL after removing known tracking parameters; job-identifying query parameters and meaningful SPA routes remain. The same URL gets the same ID on success and failure. Explicit research `scenarioId` options override this default. Different listings sharing a URL, changed content at an old URL, or duplicate adverts on different URLs require a saved-scenario manifest; URL identity does not prove independent recruitment cases. Failures before a URL is available remain recorded, but are reported as unidentified and excluded from case rates.
+
+For each case, the first retained measured attempt determines success/failure; a successful retry does not erase a failure. Speed is summarized within each case first, then median and p95 are calculated across those case medians. Successful and failed scan speeds are separate, with extraction, local scoring and client-observed backend timings available in the JSON report. Backend timeout time is retained; a usable local result with unavailable corroboration remains a successful local scan. Missing timings are reported, not replaced with zero. Totals describe the retained 500-record/30-day history, not lifetime totals.
+
+`evaluationOverride` runs and explicitly marked `timingPhase: "warmup"` runs are excluded; ordinary first scans are not silently treated as warm-ups. A formal timing harness must still predeclare its two warm-ups and ten measured repeats and supply stable saved-scenario IDs. Legacy random scenario IDs are not retroactively guessed or merged. Export the older history before clearing it if you want a clean run of the new statistics. `analysis/evaluate.py` emits the same scenario-weighted RQ2 timing definitions as the dashboard, replacing the former run-weighted mean latency output.

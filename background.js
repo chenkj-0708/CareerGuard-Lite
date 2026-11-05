@@ -1,5 +1,8 @@
 import { combineBackend, scoreAll } from "./lib/scoring.js";
-import { validatePageSignal } from "./lib/page-signal.js";
+import { CONFIG_ID } from "./lib/risk-rules.js";
+import { scenarioIdForUrl } from "./lib/scan-statistics.js";
+import { matchTestCase } from "./lib/test-cases.js";
+import { validatePageSignal, PageSignalValidationError } from "./lib/page-signal.js";
 import { excerptHash, HASH_CONTRACT_VERSION } from "./lib/hash-contract.js";
 
 const DEFAULTS = {
@@ -18,11 +21,12 @@ async function configureSidePanel() {
 
 configureSidePanel().catch((error) => console.error("Unable to configure side panel", error));
 
-async function activeTab() {
+async function activeTab(attempt) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) throw new Error("No active browser tab was found.");
+  if (!tab?.id) throw Object.assign(new Error("No active browser tab was found."), { failureCode: "NO_ACTIVE_TAB" });
+  if (tab.url) attempt.scenarioId = attempt.scenarioId || await scenarioIdForUrl(tab.url);
   if (!/^https?:/i.test(tab.url || "")) {
-    throw new Error(`This page cannot be scanned (${tab.url || "URL unavailable"}). Open a normal public website using HTTP or HTTPS.`);
+    throw Object.assign(new Error("This page cannot be scanned. Open a normal public website using HTTP or HTTPS."), { failureCode: "UNSUPPORTED_PAGE" });
   }
   return tab;
 }
@@ -80,34 +84,93 @@ async function purgeLocalHistory() {
 purgeLocalHistory().catch(() => {});
 const derivedOnly = value => JSON.parse(JSON.stringify(value, (key, item) => key === "evidence" ? undefined : item));
 
+const FAILURE_REASONS = {
+  SETUP_FAILED: "Unable to prepare local scan storage.",
+  TAB_ACCESS_FAILED: "Unable to access the active browser tab.",
+  NO_ACTIVE_TAB: "No active browser tab was found.",
+  UNSUPPORTED_PAGE: "This page cannot be scanned. Open a normal public website using HTTP or HTTPS.",
+  INJECTION_FAILED: "Unable to read this page. It may be unavailable or restricted by the browser.",
+  EXTRACTION_FAILED: "Unable to read the listing content.",
+  INVALID_PAGE_SIGNAL: "The page reader returned incomplete or invalid data.",
+  UNRELIABLE_EXTRACTION: "Unable to reliably identify the job advertisement content.",
+  SCORING_FAILED: "Unable to assess the extracted listing.",
+  SAVE_FAILED: "Unable to save the scan result.",
+  SYSTEM_ERROR: "The scan could not be completed because of a system error.",
+  CASE_MISMATCH: "Test case identification failed. Check the registered page URL and case ID in the evaluation dashboard."
+};
+const STAGE_FAILURE = { setup: "SETUP_FAILED", tab: "TAB_ACCESS_FAILED", injection: "INJECTION_FAILED",
+  extraction: "EXTRACTION_FAILED", validation: "INVALID_PAGE_SIGNAL", scoring: "SCORING_FAILED", persistence: "SAVE_FAILED" };
+let failureWrites = Promise.resolve();
 async function scan(options = {}) {
+  options = options || {};
+  const attempt = { id: crypto.randomUUID(), scenarioId: options.scenarioId || null, startedAt: new Date().toISOString(), started: performance.now(), stage: "setup", page: null };
+  try { return await performScan(options, attempt); }
+  catch (error) {
+    const code = Object.hasOwn(FAILURE_REASONS, error?.failureCode) ? error.failureCode : STAGE_FAILURE[attempt.stage] || "SYSTEM_ERROR";
+    const page = attempt.page;
+    const validationError=error instanceof PageSignalValidationError;
+    const reason = FAILURE_REASONS[code] + (validationError ? " " + error.message : "");
+    const failure = {
+      id: attempt.id, attemptId: attempt.id, createdAt: new Date().toISOString(), startedAt: attempt.startedAt,
+      scenarioId: attempt.scenarioId, scenarioIdentityVersion: options.scenarioId || attempt.testCase ? "manifest-v1" : "page-url-v1", groupId: attempt.testCase?.groupId || options.groupId || null,
+      timingPhase: options.timingPhase === "warmup" ? "warmup" : "measured",
+      split: attempt.testCase?.split || options.split || null, configId: CONFIG_ID, evaluationOverride: options.evaluationOverride === true,
+      failureStage: attempt.stage, failureCode: code, failureReason: reason,
+      ...(validationError ? {validationCode:error.validationCode,validationField:error.validationField}:{}),
+      totalLatencyMs: Number((performance.now() - attempt.started).toFixed(2)),
+      domain: page?.domain || null, siteType: page?.siteType || null, pageStatus: page?.pageStatus || "unavailable",
+      extractionStatusCode: page?.extractionStatusCode || null, rootSource: page?.rootSource || null,
+      extractionLatencyMs: page?.extractionLatencyMs ?? null, extractionStatus: page?.extractionStatus || "unavailable",
+      extractionStrategy: page?.extractionStrategy || null, selectedContainer: page?.selectedContainer || null,
+      missingFields: page?.missingFields || [], fallbackReason: page?.fallbackReason || null
+    };
+    // Serialize failed writes so simultaneous scan failures cannot overwrite each other.
+    // Never persist raw exception messages, URLs, page text or stack traces.
+    const write = failureWrites.catch(() => {}).then(async () => {
+      const { extractionFailures = [] } = await storageGet(["extractionFailures"]);
+      await storageSet({ lastScan: null, extractionFailures: purgeRecords([...extractionFailures, failure]) });
+    });
+    failureWrites = write;
+    let recorded = true;
+    try { await write; } catch { recorded = false; }
+    const hint = page?.fallbackReason === "verification-required"
+      ? " Complete the site's verification in your browser, then scan the loaded job listing."
+      : page?.fallbackReason === "description-not-ready" ? " Open a job and wait for its description to load, then try again." : "";
+    throw Object.assign(new Error(reason + hint + (recorded ? "" : " The failure record could not be saved because local storage is unavailable.")),
+      { failureCode: code, failureRecorded: recorded, attemptId: attempt.id });
+  }
+}
+
+async function performScan(options, attempt) {
   await purgeLocalHistory();
   const settings = { ...DEFAULTS, ...(await storageGet(Object.keys(DEFAULTS))), ...options };
-  const tab = await activeTab();
-  const started = performance.now();
+  attempt.stage = "tab";
+  const tab = await activeTab(attempt);
+  const { testCases = [] } = await storageGet(["testCases"]);
+  let testCase;
+  try { testCase = matchTestCase(testCases,tab.url,options.scenarioId); }
+  catch { throw Object.assign(new Error("Test case mismatch"),{failureCode:"CASE_MISMATCH"}); }
+  if(testCase){
+    attempt.scenarioId=testCase.scenarioId;
+    options={...options,scenarioId:testCase.scenarioId,groupId:testCase.groupId||null,split:testCase.split||null};
+    // Only identities go to prediction; the separately stored human answer is joined on export.
+    attempt.testCase=testCase;
+  }
+  const started = attempt.started;
+  attempt.stage = "injection";
   await ensureContentScript(tab.id);
+  attempt.stage = "extraction";
   const extracted = await chrome.tabs.sendMessage(tab.id, { type: "CG_EXTRACT" });
   if (!extracted?.ok) throw new Error("The listing could not be extracted.");
 
+  attempt.stage = "validation";
   const page = validatePageSignal(extracted.page);
+  attempt.page = page;
   if (page.extractionStatus !== "reliable") {
-    const { extractionFailures = [] } = await storageGet(["extractionFailures"]);
-    await storageSet({ lastScan: null, extractionFailures: [...extractionFailures, {
-      createdAt: new Date().toISOString(), id: page.scanId, scenarioId: options.scenarioId || page.scanId,
-      groupId: options.groupId || null, split: options.split || null,
-      domain: page.domain, siteType: page.siteType, pageStatus: page.pageStatus,
-      extractionStatusCode: page.extractionStatusCode, rootSource: page.rootSource,
-      extractionLatencyMs: page.extractionLatencyMs,
-      extractionStatus: page.extractionStatus, extractionStrategy: page.extractionStrategy,
-      selectedContainer: page.selectedContainer, missingFields: page.missingFields,
-      fallbackReason: page.fallbackReason
-    }].slice(-500) });
-    const hint = page.fallbackReason === "verification-required"
-      ? " Complete the site's verification in your browser, then scan the loaded job listing."
-      : page.fallbackReason === "description-not-ready"
-        ? " Open a job and wait for its description to load, then try again." : "";
-    throw new Error("Unable to reliably identify the job advertisement content." + hint);
+    attempt.stage = "extraction";
+    throw Object.assign(new Error(FAILURE_REASONS.UNRELIABLE_EXTRACTION), { failureCode: "UNRELIABLE_EXTRACTION" });
   }
+  attempt.stage = "scoring";
   const scoringStarted = performance.now();
   const baselines = scoreAll(page);
   const localScoringLatencyMs = Number((performance.now() - scoringStarted).toFixed(2));
@@ -118,6 +181,7 @@ async function scan(options = {}) {
   const shouldEscalate = (settings.forceEscalation && settings.evaluationOverride === true) || (fullWorkflowEnabled && ["uncertain", "elevated"].includes(baselines.multiSignal.tier));
 
   if (shouldEscalate) {
+    const backendStarted = performance.now();
     const notification = chrome.runtime.sendMessage?.({ type: "CG_LOCAL_RESULT", record: {
       page: { pageStatus: page.pageStatus }, displayedResult: selected,
       escalation: { attempted: true, status: "pending" }, interfaceCondition: settings.showReasons ? "explanation" : "score-only",
@@ -132,6 +196,7 @@ async function scan(options = {}) {
     } catch (error) {
       escalation = { attempted: true, status: "unavailable", error: error.message === "Corroboration timeout." ? "TIMEOUT" : "CORROBORATION_UNAVAILABLE" };
     }
+    escalation.clientLatencyMs = Number((performance.now() - backendStarted).toFixed(2));
   }
 
   const fullWorkflow = fullWorkflowEnabled
@@ -140,6 +205,8 @@ async function scan(options = {}) {
   if (fullWorkflowEnabled) finalResult = fullWorkflow;
 
   const scanRecord = {
+    attemptId: attempt.id,
+    startedAt: attempt.startedAt,
     id: page.scanId || crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     page: {
@@ -174,13 +241,15 @@ async function scan(options = {}) {
     localScoringLatencyMs,
     totalLatencyMs: Number((performance.now() - started).toFixed(2)),
     evaluationOverride: settings.evaluationOverride === true,
-    scenarioId: options.scenarioId || page.scanId, groupId: options.groupId || null,
+    scenarioId: attempt.scenarioId, scenarioIdentityVersion: options.scenarioId ? "manifest-v1" : "page-url-v1",
+    timingPhase: options.timingPhase === "warmup" ? "warmup" : "measured", groupId: options.groupId || null,
     split: options.split || null, overlapCategory: options.overlapCategory || null,
     configId: baselines.multiSignal.configId,
     groundTruth: null,
     participantResponse: null
   };
 
+  attempt.stage = "persistence";
   const { scanLogs = [] } = await storageGet(["scanLogs"]);
   const nextLogs = purgeRecords([...scanLogs, scanRecord]);
   await storageSet({ lastScan: scanRecord, scanLogs: nextLogs, ...Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, settings[key]])) });

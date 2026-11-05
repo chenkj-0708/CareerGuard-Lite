@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { scoreAll } from "../lib/scoring.js";
+import { validatePageSignal } from "../lib/page-signal.js";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.CG_PLAYWRIGHT || "playwright");
 const browser = await chromium.launch({ headless: true, channel: "msedge" });
@@ -24,6 +26,15 @@ for (const [domain, site, selector] of [["www.jobstreet.com.my", "JobStreet", 'd
 }
 const structured = { "@context": "https://schema.org", "@type": "JobPosting", title: "Software Engineer", description,
   hiringOrganization: { name: "Example", sameAs: "https://employer.example.com" } };
+const advertisement = `<div class="advertisement"><h1>Urgent hiring</h1><div class="company">Pay registration fee via WhatsApp</div><p>Guaranteed income recruiter@gmail.com</p><span><a href="https://bit.ly/ad">Apply now</a></span>${Array.from({length:9},(_,i)=>`<a href="https://ad${i}.com">Advertisement</a>`).join("")}</div><div data-ad-slot="banner"><a href="https://tinyurl.com/ad">Submit application</a><p>Bank account and processing fee</p></div><ins class="adsbygoogle"><a href="https://t.co/ad">Register</a></ins>`;
+for (const [domain,site,selector] of [["www.jobstreet.com.my","JobStreet",'data-automation="jobAdDetails"'],["www.indeed.com","Indeed",'id="jobDescriptionText"'],["www.linkedin.com","LinkedIn",'class="jobs-description__content"'],["example.com","Generic",'class="job-description"']]) {
+  cases.push({id:`${site}-advertisement`,domain,site,expected:"reliable",adIsolation:true,
+    html:`<main><section ${selector}>${advertisement}<h1>Software Engineer</h1><div class="company">Example</div><p>${description} We maintain advertising software.</p><a href="https://careers.example.com/apply">Apply for this job</a></section></main>`});
+}
+cases.push({id:"Generic-schema-advertisement",domain:"example.com",site:"Generic",expected:"reliable",expectedStrategy:"schema.org-jobposting",adIsolation:true,
+  html:`<script type="application/ld+json">${JSON.stringify(structured)}</script><main>${advertisement}<h1>Software Engineer</h1><p>${description}</p><a href="https://careers.example.com/apply">Apply for this job</a></main>`});
+cases.push({id:"Generic-advertisement-only",domain:"example.com",site:"Generic",expected:"unavailable",
+  html:`<main class="advertisement"><section class="job-description"><h1>Software Engineer</h1><p>${description}</p><a href="https://bit.ly/ad">Apply</a></section></main>`});
 cases.push({ id: "Generic-schema", domain: "example.com", site: "Generic", expected: "reliable",
   html: `<script type="application/ld+json">${JSON.stringify(structured)}</script><main><h1>Software Engineer</h1><p>${description}</p></main>` });
 cases.push({ id: "Generic-schema-multiple", domain: "example.com", site: "Generic", expected: "unavailable",
@@ -72,6 +83,7 @@ try {
       extract({ type: "CG_EXTRACT", waitForContent }, {}, value => resolve(value.page));
     }), item.waitForContent || false);
     assert.equal(result.extractionStatus, item.expected, item.id);
+    validatePageSignal(result);
     assert.equal(result.siteType, item.site, item.id);
     assert.equal(result.schemaVersion, 1);
     assert.ok(result.scanId);
@@ -79,6 +91,20 @@ try {
     assert.equal(result.ExtractionSufficiency, Math.round(100 * result.extractionQuality));
     assert.ok(result.rootSource && result.extractionStatusCode && result.truncationFlags);
     if (item.expected === "reliable") assert.equal(result.pageStatus, "scoreable");
+    if (item.adIsolation) {
+      assert.equal(result.title,"Software Engineer",item.id);
+      assert.equal(result.companyText,"Example",item.id);
+      assert.ok(!/registration fee|processing fee|WhatsApp|recruiter@gmail.com|Guaranteed income/i.test(result.visibleText),item.id);
+      assert.deepEqual(result.emailProvider,[],item.id);
+      assert.deepEqual(result.contactCues,[],item.id);
+      assert.deepEqual(result.links,["https://careers.example.com/apply"],item.id);
+      assert.deepEqual(result.applicationLinks,["https://careers.example.com/apply"],item.id);
+      assert.deepEqual(result.externalLinks,item.site === "Generic" ? [] : ["https://careers.example.com/apply"],item.id);
+      if (item.id !== "Generic-schema-advertisement") assert.ok(result.visibleText.includes("advertising software"),item.id);
+      await page.evaluate(()=>document.querySelectorAll(".advertisement, [data-ad-slot], .adsbygoogle").forEach(node=>node.remove()));
+      const withoutAds = await page.evaluate(()=>new Promise(resolve=>extract({type:"CG_EXTRACT",waitForContent:false},{},value=>resolve(value.page))));
+      assert.deepEqual(scoreAll(result),scoreAll(withoutAds),`${item.id}: ads must not change any score or reason`);
+    }
     if (item.id === "Indeed-pagesignal-caps") {
       assert.equal(Array.from(result.visibleText).length, 30000);
       assert.equal(Array.from(result.companyText).length, 500);

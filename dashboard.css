@@ -8,3 +8,8 @@ input { border: 1px solid #bcc8d8; border-radius: 8px; padding: 10px; }button { 
 .section-head { display:flex;justify-content:space-between;gap:16px;align-items:center}.section-head p{margin:0;color:#64748b;font-size:13px}.table-wrap{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e2e8f0}th{color:#526177;background:#f7f9fc}.muted{color:#8a96a8}ol{line-height:1.8}@media(max-width:800px){.cards{grid-template-columns:1fr 1fr}.settings,.section-head{align-items:stretch;flex-direction:column}}
 .selected-score { background: #dff6ed; color: #116248; font-weight: 800; }
 .mode-badge { display: inline-block; padding: 4px 7px; border-radius: 999px; background: #edf2f8; font-weight: 700; white-space: nowrap; }
+#caseForm { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; align-items: end; }
+#caseForm label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+#caseForm input, #caseForm select { min-width: 0; width: 100%; box-sizing: border-box; }
+#caseForm select { border: 1px solid #bcc8d8; border-radius: 8px; padding: 10px; background: white; }
+#testCases { overflow: auto; }

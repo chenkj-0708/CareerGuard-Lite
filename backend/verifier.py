@@ -1,4 +1,4 @@
-"""Read-only, authorised exact-hash index lookup; no domain/RDAP requests."""
+"""Read-only lookup against an authorised exact-hash corroboration index."""
 import hashlib
 import json
 import time

@@ -15,7 +15,8 @@ const {BACKEND_TIMEOUT_MS}=await import("../background.js");
 assert.equal(BACKEND_TIMEOUT_MS,2000);
 const scan=options=>new Promise(resolve=>listener({type:"CG_SCAN",options:{mode:"multiSignal",autoEscalate:true,...options}}, {},resolve));
 const base={schemaVersion:1,scanId:"scan-1234567890123",capturedAt:new Date().toISOString(),rootSource:"site-specific",selectorConfidence:"high",extractionStatusCode:"OK",truncationFlags:{visibleText:false,companyText:false,links:false,applicationLinks:false},fallbackFlags:{title:false,companyText:false},extractionQuality:1,ExtractionSufficiency:100,domain:"example.com",siteType:"Generic",pageStatus:"scoreable",extractionStatus:"reliable",visibleText:"Registration fee. Bank account. Urgent hiring. WhatsApp. Guaranteed income. No interview. ".repeat(8),url:"https://example.com/job?tracking=private#fragment",protocol:"https:",title:"Engineer",companyText:"Example",emailProvider:["gmail.com"],links:[],externalLinks:[],applicationLinks:["https://bit.ly/x"],contactCues:["whatsapp"]};
-page={...base,extractionStatus:"unavailable",pageStatus:"unsupported",rootSource:"none",selectorConfidence:"none",extractionStatusCode:"NO_SINGLE_LISTING"};
+Object.assign(base,{extractionStrategy:"site-specific",selectedContainer:"#description",missingFields:[],fallbackReason:null,extractionLatencyMs:1});
+page={...base,extractionStatus:"unavailable",pageStatus:"unsupported",rootSource:"none",selectorConfidence:"none",extractionStatusCode:"NO_SINGLE_LISTING",extractionStrategy:"none",selectedContainer:null,extractionQuality:0,ExtractionSufficiency:0,fallbackReason:"no-reliable-single-listing-container"};
 assert.equal((await scan()).ok,false);assert.equal(requests.length,0);assert.equal(stored.lastScan,null);
 page={...base};
 for(mode of ["success","offline","corrupted","timeout"]){
@@ -24,6 +25,9 @@ for(mode of ["success","offline","corrupted","timeout"]){
  assert.equal(response.record.displayedResult.tier,response.record.baselines.multiSignal.tier);
  assert.equal(response.record.escalation.status,mode==="success"?"completed":"unavailable");
  assert.equal(response.record.page.url,"https://example.com/job");
+ assert.match(response.record.scenarioId,/^page-v1-[a-f0-9]{64}$/);
+ if(mode === "success")globalThis.firstScenarioId=response.record.scenarioId;
+ else assert.equal(response.record.scenarioId,globalThis.firstScenarioId);
  if(mode==="timeout"){assert.ok(performance.now()-start>=1900);assert.ok(performance.now()-start<2600);}
 }
 assert.deepEqual(Object.keys(requests[0]).sort(),["requestId","schemaVersion","scenarioOrScanId","excerptHash","hashContractVersion","capabilityToken"].sort());
@@ -32,4 +36,11 @@ assert.ok(!JSON.stringify(requests).includes("example.com"));
 assert.ok(!JSON.stringify(stored).includes(page.visibleText));
 mode="success";page={...base,visibleText:"Normal engineering work. ".repeat(20),emailProvider:[],contactCues:[],applicationLinks:[]};
 const before=requests.length;const low=await scan({forceEscalation:true});assert.equal(low.record.escalation.attempted,false);assert.equal(requests.length,before);
+stored.testCases=[{scenarioId:"CG-001",url:"https://example.com/job",groundTruth:"elevated",groupId:"GROUP-001",split:"test",labelledAt:new Date().toISOString()}];
+const registered=await scan();assert.equal(registered.ok,true);
+assert.equal(registered.record.scenarioId,"CG-001");assert.equal(registered.record.groupId,"GROUP-001");
+assert.equal(registered.record.split,"test");assert.equal(registered.record.groundTruth,null);
+assert.equal(registered.record.baselines.multiSignal.score,low.record.baselines.multiSignal.score);
+assert.equal((await scan({scenarioId:"CG-WRONG"})).ok,false);
+assert.equal(stored.extractionFailures.at(-1).failureCode,"CASE_MISMATCH");
 console.log("hash-only workflow, 2-second deadline, safe failure and eligibility tests passed");

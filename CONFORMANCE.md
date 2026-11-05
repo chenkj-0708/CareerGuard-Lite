@@ -5,7 +5,7 @@ Authority: `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`. PDF page numbers below 
 | User issue | Formal source | Implemented change | Automated evidence |
 | --- | --- | --- | --- |
 | Fusion formula | PDF 79-80, Equations 4.1-4.4 | Zero-start evidence sums; 101/49 branch normalisation; 50/50 fusion; no shared bonus | scoring.test.mjs |
-| Hash-only backend | PDF 75, 80-81, VerifyRequest/Algorithm 4.3 | Exactly six fields; local SHA-256; read-only manifest/checksummed index; no outgoing domain/RDAP lookup | hash.test.mjs; workflow.test.mjs; test_backend.py |
+| Hash-only backend | PDF 75, 80-81, VerifyRequest/Algorithm 4.3 | Exactly six fields; local SHA-256; read-only manifest/checksummed index; no outbound lookup | hash.test.mjs; workflow.test.mjs; test_backend.py |
 | Formal RQ1 | PDF 44-53, Chapter 3 | Validation-selected single branch, equal group MAOE, paired group bootstrap, lower-overlap, corrections/worsenings, sensitivity/kappa, support and integrity gates | test_rq1.py; test_evaluate.py |
 | Two-second timeout | PDF 67, Table 4.2 | One 2,000 ms deadline over hashing/health/verify/parse; local output remains visible and unchanged | workflow.test.mjs, including a never-resolving backend |
 | PageSignal v1 and PSL | PDF 73-74, Table 4.5 | Explicit schema/root/confidence/status/fallback/truncation fields; provider domains; local official PSL snapshot and browser/Python parity | extraction.test.mjs; scoring.test.mjs; test_backend.py |

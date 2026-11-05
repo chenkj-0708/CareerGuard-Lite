@@ -352,6 +352,72 @@
     "capture_date": "2026-10-13"
   },
   {
+    "id": "JobStreet-advertisement",
+    "source": "https://www.jobstreet.com.my/job",
+    "representation": "JobStreet-advertisement.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Indeed-advertisement",
+    "source": "https://www.indeed.com/job",
+    "representation": "Indeed-advertisement.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "LinkedIn-advertisement",
+    "source": "https://www.linkedin.com/job",
+    "representation": "LinkedIn-advertisement.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Generic-advertisement",
+    "source": "https://example.com/job",
+    "representation": "Generic-advertisement.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Generic-schema-advertisement",
+    "source": "https://example.com/job",
+    "representation": "Generic-schema-advertisement.html",
+    "expected_extraction_status": "reliable",
+    "expected_region": "single job container",
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
+    "id": "Generic-advertisement-only",
+    "source": "https://example.com/job",
+    "representation": "Generic-advertisement-only.html",
+    "expected_extraction_status": "unavailable",
+    "expected_region": null,
+    "synthetic": true,
+    "public_demo_allowed": true,
+    "adjudication_status": "automated conformance expectation",
+    "capture_date": "2026-10-13"
+  },
+  {
     "id": "Generic-schema",
     "source": "https://example.com/job",
     "representation": "Generic-schema.html",

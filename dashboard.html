@@ -14,11 +14,24 @@
       <button id="saveSettings">Save settings</button><button id="health">Test backend</button><span id="healthStatus"></span>
     </section>
     <section class="cards" id="summary"></section>
+    <section class="panel"><h2>Scan success and speed</h2><div id="scanSummary"></div></section>
+    <section class="panel">
+      <h2>Test pages and human answers</h2>
+      <p>Register a page before scanning. Give it a fixed ID and enter your own answer without viewing system scores. The answer is stored separately and paired with predictions when you export. A single person's answer is a research reference, not confirmed fraud truth.</p>
+      <form id="caseForm">
+        <label>Case ID<input id="testId" placeholder="CG-001" required pattern="[A-Za-z0-9_-]{1,80}"></label>
+        <label>Page URL<input id="testUrl" type="url" placeholder="https://…" required></label>
+        <label>Your answer<select id="testLabel"><option value="">Not labelled yet</option><option value="low">Low</option><option value="uncertain">Uncertain</option><option value="elevated">Elevated</option><option value="reference-insufficient">Insufficient information</option></select></label>
+        <label>Group ID (optional)<input id="testGroup" placeholder="GROUP-001"></label>
+        <label>Split<select id="testSplit"><option value="">Not assigned</option><option value="development">Development</option><option value="validation">Validation</option><option value="test">Test</option></select></label>
+        <button type="submit">Save test page</button>
+      </form>
+      <p id="caseStatus" role="status"></p><div id="testCases"></div>
+    </section>
     <section class="panel">
       <div class="section-head"><div><h2>Captured evaluation records</h2><p>Each scan computes every local baseline from the same page. The selected mode is highlighted.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear logs</button></div></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Page</th><th>Selected mode</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Full</th><th>Signals</th><th>Truth</th><th>Condition</th><th>Latency</th></tr></thead><tbody id="records"></tbody></table></div>
     </section>
-    <section class="panel"><h2>How to run a fair comparison</h2><ol><li>Use the same saved/public listing scenarios for every method.</li><li>Assign ground truth before analysing results.</li><li>Record text-only, metadata-only and multi-signal scores from one scan.</li><li>Run the backend and repeat uncertain/elevated cases for the full-workflow comparison.</li><li>Alternate score-only and explanation conditions across evaluators.</li></ol></section>
   </main>
   <script type="module" src="dashboard.js"></script>
 </body>

@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/scoring.test.mjs && node tests/hash.test.mjs && node tests/synthetic-fixtures.test.mjs && node tests/workflow.test.mjs",
+    "test": "node tests/scoring.test.mjs && node tests/hash.test.mjs && node tests/synthetic-fixtures.test.mjs && node tests/workflow.test.mjs && node tests/scan-failures.test.mjs && node tests/scan-statistics.test.mjs && node tests/test-cases.test.mjs && node tests/page-signal.test.mjs",
     "test:extraction": "node tests/extraction.test.mjs",
+    "test:dashboard": "node tests/dashboard-statistics.test.mjs",
     "test:backend": "python -m unittest discover -s tests"
   }
 }

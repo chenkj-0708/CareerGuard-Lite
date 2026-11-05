@@ -1,10 +1,13 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "CareerGuard PageSignal v1",
   "type": "object",
   "required": [
     "schemaVersion",
     "scanId",
     "capturedAt",
+    "domain",
+    "siteType",
     "rootSource",
     "selectorConfidence",
     "extractionStatusCode",
@@ -12,11 +15,41 @@
     "fallbackFlags",
     "extractionQuality",
     "ExtractionSufficiency",
-    "pageStatus"
+    "pageStatus",
+    "extractionStatus",
+    "extractionStrategy",
+    "selectedContainer",
+    "missingFields",
+    "fallbackReason",
+    "extractionLatencyMs"
   ],
   "properties": {
     "schemaVersion": {
       "const": 1
+    },
+    "scanId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "\\S"
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$"
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "siteType": {
+      "enum": [
+        "JobStreet",
+        "Indeed",
+        "LinkedIn",
+        "Generic"
+      ]
     },
     "rootSource": {
       "enum": [
@@ -52,6 +85,112 @@
         "extraction-limited"
       ]
     },
+    "extractionStatus": {
+      "enum": [
+        "reliable",
+        "unavailable"
+      ]
+    },
+    "extractionStrategy": {
+      "enum": [
+        "site-specific",
+        "schema.org-jobposting",
+        "jobposting",
+        "job-description",
+        "bounded-generic",
+        "none"
+      ]
+    },
+    "selectedContainer": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 500
+    },
+    "fallbackReason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 120
+    },
+    "missingFields": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "description",
+          "companyText"
+        ]
+      }
+    },
+    "truncationFlags": {
+      "type": "object",
+      "required": [
+        "visibleText",
+        "companyText",
+        "links",
+        "applicationLinks"
+      ],
+      "properties": {
+        "visibleText": {
+          "type": "boolean"
+        },
+        "companyText": {
+          "type": "boolean"
+        },
+        "links": {
+          "type": "boolean"
+        },
+        "applicationLinks": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fallbackFlags": {
+      "type": "object",
+      "required": [
+        "title",
+        "companyText"
+      ],
+      "properties": {
+        "title": {
+          "type": "boolean"
+        },
+        "companyText": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "extractionQuality": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "ExtractionSufficiency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "extractionLatencyMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://[^/@\\s]+(?:[/?#]|$)"
+    },
+    "protocol": {
+      "enum": [
+        "http:",
+        "https:"
+      ]
+    },
     "visibleText": {
       "type": "string",
       "maxLength": 30000
@@ -60,32 +199,187 @@
       "type": "string",
       "maxLength": 500
     },
+    "title": {
+      "type": "string"
+    },
     "links": {
       "type": "array",
       "maxItems": 100,
-      "uniqueItems": true
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https?://[^/@\\s]+(?:[/?#]|$)"
+      }
+    },
+    "externalLinks": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https?://[^/@\\s]+(?:[/?#]|$)"
+      }
     },
     "applicationLinks": {
       "type": "array",
       "maxItems": 20,
-      "uniqueItems": true
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https?://[^/@\\s]+(?:[/?#]|$)"
+      }
     },
     "emailProvider": {
       "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
       "items": {
-        "type": "string"
-      },
-      "uniqueItems": true
+        "type": "string",
+        "pattern": "^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,63}$"
+      }
     },
-    "extractionQuality": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1
+    "contactCues": {
+      "type": "array",
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "whatsapp",
+          "telegram",
+          "wechat",
+          "signal"
+        ]
+      }
     }
   },
-  "not": {
-    "required": [
-      "emails"
-    ]
-  }
+  "allOf": [
+    {
+      "not": {
+        "required": [
+          "emails"
+        ]
+      }
+    },
+    {
+      "not": {
+        "required": [
+          "document_body"
+        ]
+      }
+    },
+    {
+      "not": {
+        "required": [
+          "raw_page"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "pageStatus": {
+            "const": "scoreable"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "url",
+          "protocol",
+          "title",
+          "companyText",
+          "visibleText",
+          "links",
+          "externalLinks",
+          "applicationLinks",
+          "emailProvider",
+          "contactCues"
+        ],
+        "properties": {
+          "extractionStatus": {
+            "const": "reliable"
+          },
+          "extractionStatusCode": {
+            "const": "OK"
+          },
+          "rootSource": {
+            "enum": [
+              "site-specific",
+              "schema.org-jobposting",
+              "jobposting",
+              "job-description",
+              "bounded-generic"
+            ]
+          },
+          "selectorConfidence": {
+            "enum": [
+              "high",
+              "bounded"
+            ]
+          },
+          "selectedContainer": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "fallbackReason": {
+            "type": "null"
+          },
+          "title": {
+            "type": "string"
+          },
+          "visibleText": {
+            "minLength": 150
+          },
+          "missingFields": {
+            "not": {
+              "contains": {
+                "const": "description"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "extractionStatus": {
+            "const": "unavailable"
+          },
+          "extractionStatusCode": {
+            "enum": [
+              "AMBIGUOUS_LISTINGS",
+              "SITE_VERIFICATION_REQUIRED",
+              "DESCRIPTION_NOT_READY",
+              "NO_SINGLE_LISTING",
+              "INSUFFICIENT_VISIBLE_TEXT"
+            ]
+          },
+          "selectorConfidence": {
+            "const": "none"
+          },
+          "extractionQuality": {
+            "const": 0
+          },
+          "ExtractionSufficiency": {
+            "const": 0
+          },
+          "extractionStrategy": {
+            "const": "none"
+          },
+          "selectedContainer": {
+            "type": "null"
+          },
+          "fallbackReason": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  ],
+  "$comment": "Runtime validation additionally enforces finite numbers, valid calendar dates, non-whitespace text, URL/host/protocol equality, ExtractionSufficiency=round(100*extractionQuality), root/strategy equality, and company missing-field consistency. Use validatePageSignal before scoring. Empty title requires its explicit fallback flag; a complete description can remain scoreable without a title."
 }
