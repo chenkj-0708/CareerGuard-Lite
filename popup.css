@@ -20,3 +20,5 @@ ul { padding-left: 18px; font-size: 12px; } li { margin: 5px 0; }
 .warning { color: #a43b32; font-size: 12px; }.success { color: #15704e; font-size: 12px; }
 footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #d9e1ec; padding: 10px 20px; font-size: 11px; color: #6b778a; }
 .link { border: 0; padding: 0; color: #176f8e; background: transparent; font-size: 11px; }
+.technical-details { margin-top: 10px; color: #526177; font-size: 12px; line-height: 1.5; }
+.technical-details summary { cursor: pointer; }

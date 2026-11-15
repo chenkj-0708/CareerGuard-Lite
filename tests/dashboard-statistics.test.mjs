@@ -8,7 +8,7 @@ try {
   const page=await browser.newPage();
   await page.route("https://extension.test/**",route=>{
     const path=new URL(route.request().url()).pathname.slice(1);
-    if(!["dashboard.html","dashboard.css","dashboard.js","lib/scan-statistics.js","lib/test-cases.js"].includes(path))return route.abort();
+    if(!["dashboard.html","dashboard.css","dashboard.js","lib/scan-statistics.js","lib/test-cases.js","lib/dashboard-metrics.js","lib/backend-client.js","lib/risk-rules.js","lib/research-protocol.js"].includes(path))return route.abort();
     route.fulfill({body:fs.readFileSync(new URL(`../${path}`,import.meta.url)),contentType:path.endsWith(".js")?"text/javascript":path.endsWith(".css")?"text/css":"text/html"});
   });
   await page.addInitScript(()=>{
@@ -21,10 +21,27 @@ try {
   const text=await page.locator("#scanSummary").innerText();
   assert.ok(text.includes("1 successful")&&text.includes("1 failed"));
   assert.ok(text.includes("100.0 ms")&&text.includes("800.0 ms"));
+  assert.equal(await page.locator("#backendUrl").getAttribute("readonly"), "");
+  assert.equal(await page.locator("#saveSettings").count(), 0);
+  assert.ok((await page.locator("#summary").innerText()).includes("Human-reference agreement (descriptive)"));
+  assert.ok((await page.locator("#records .selected-score").innerText()).includes("5 · Low ✓"));
+  let healthMode = "no-index";
+  await page.route("http://127.0.0.1:8765/health", async route => {
+    if (healthMode === "timeout") return;
+    await route.fulfill({ json: healthMode === "legacy" ? { ok:true } : { ok:true, indexAvailable:healthMode === "ready" } });
+  });
+  for (const [mode, expected] of [["no-index", "Index: not configured"], ["ready", "Index: available"], ["legacy", "Index: unknown"], ["timeout", "timed out"]]) {
+    healthMode = mode;
+    await page.click("#health");
+    await page.waitForFunction(() => !document.getElementById("health").disabled);
+    assert.ok((await page.locator("#healthStatus").innerText()).includes(expected));
+  }
   page.on("dialog",dialog=>dialog.accept());
   await page.click("#clear");
   await page.waitForFunction(()=>document.getElementById("scanSummary").textContent.includes("0 distinct page cases"));
   assert.deepEqual(await page.evaluate(()=>stored.extractionFailures),[]);
+  await page.fill("#researchAnnotator","researcher-1");await page.fill("#researchRubric","single-rubric-v1");await page.click("#saveResearch");
+  await page.waitForFunction(()=>stored.analysisContract?.annotatorId === "researcher-1");
   await page.fill("#testId","CG-001");await page.fill("#testUrl","https://example.com/job?jk=1");
   await page.selectOption("#testLabel","low");await page.click("#caseForm button");
   await page.waitForFunction(()=>document.getElementById("caseStatus").textContent.includes("Saved CG-001"));
@@ -37,7 +54,32 @@ try {
   const exported=await page.evaluate(()=>JSON.parse(downloaded));
   assert.equal(exported.records[0].groundTruth,"low");
   assert.equal(exported.records[0].reference.recordedBeforePrediction,true);
+  assert.equal(exported.records[0].annotatorId,"researcher-1");
+  assert.equal(exported.records[0].annotationProtocolVersion,"single-rubric-v1");
+  assert.equal(exported.analysisContract.annotationMode,"single");
+  assert.equal(exported.analysisContract.sealedBeforeHeldOut,false);
   assert.ok(exported.records[0].baselines.textOnly && exported.records[0].baselines.metadataOnly && exported.records[0].baselines.multiSignal);
   assert.equal(await page.evaluate(()=>stored.scanLogs[0].groundTruth),null);
+  await page.evaluate(()=>{globalThis.downloaded=null;});await page.click("#exportCsv");
+  await page.waitForFunction(()=>typeof globalThis.downloaded==="string"&&downloaded.startsWith("id,"));
+  const csv=await page.evaluate(()=>downloaded);
+  assert.ok(csv.split("\n")[0].includes("annotator_id,annotation_protocol_version,reference_labelled_at,reference_before_prediction"));
+  assert.ok(csv.includes("researcher-1,single-rubric-v1"));
+  await page.click('[data-edit-case="CG-001"]');
+  assert.equal(await page.locator("#testId").getAttribute("readonly"), "");
+  await page.click("#newCase");
+  assert.equal(await page.locator("#testId").inputValue(), "");
+  assert.equal(await page.locator("#testId").getAttribute("readonly"), null);
+  await page.evaluate(() => {
+    stored.lastScan = { scenarioId:"CG-001" };
+    stored.extractionFailures = [{scenarioId:"CG-001", id:"failed"}, {scenarioId:"other", id:"retained"}];
+    stored.scanLogs.push({...stored.scanLogs[0], id:"other", scenarioId:"other"});
+  });
+  await page.click('[data-delete-case="CG-001"]');
+  await page.waitForFunction(() => document.getElementById("caseStatus").textContent.includes("Deleted CG-001"));
+  assert.equal(await page.evaluate(() => stored.testCases.length), 0);
+  assert.deepEqual(await page.evaluate(() => stored.scanLogs.map(r=>r.scenarioId)), ["other"]);
+  assert.deepEqual(await page.evaluate(() => stored.extractionFailures.map(r=>r.scenarioId)), ["other"]);
+  assert.equal(await page.evaluate(() => stored.lastScan), null);
   console.log("dashboard success/failure counts, median/p95 presentation and full reset passed");
 }finally{await browser.close();}

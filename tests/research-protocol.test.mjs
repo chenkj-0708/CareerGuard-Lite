@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import { defaultResearchContract, validateResearchContract, sealResearchContract, contractForExport, heldOutAccessTime, buildResearchExport } from "../lib/research-protocol.js";
+import { joinTestReferences } from "../lib/test-cases.js";
+
+const draft=defaultResearchContract();
+assert.equal((await buildResearchExport({})).analysisContract.sealedBeforeHeldOut,false);
+assert.equal((await buildResearchExport({})).researchReadiness.status,"incomplete");
+await assert.rejects(()=>sealResearchContract(draft,null),/Complete/);
+assert.throws(()=>validateResearchContract({...draft,lowerOverlapMinGroups:0}),/Invalid/);
+const complete={...draft,annotatorId:"researcher-1",annotationProtocolVersion:"rubric-v1",lowerOverlapMinGroups:5,lowerOverlapClassMinGroups:5,unresolvedCrossSplitPairs:0,precisionJustified:true,conformancePassed:true,leakageAuditPassed:true,overlapTaxonomySealed:true,evidenceNotes:"Synthetic functional-test declarations; not real study evidence."};
+const sealed=await sealResearchContract(complete,null,"2026-11-14T00:00:00Z");
+assert.equal((await contractForExport(sealed,"2026-11-14T00:00:01Z")).sealedBeforeHeldOut,true);
+assert.equal((await contractForExport({...sealed,annotatorId:"other"},null)).sealedBeforeHeldOut,false);
+assert.equal((await contractForExport(sealed,"2026-11-13T00:00:00Z")).sealedBeforeHeldOut,false);
+await assert.rejects(()=>sealResearchContract(complete,"2026-11-13T00:00:00Z"),/retrospectively/);
+assert.equal(heldOutAccessTime([],[],"2026-11-13T00:00:00Z"),"2026-11-13T00:00:00Z");
+const item={scenarioId:"case",url:"https://example.com/job",groundTruth:"low",labelledAt:"2026-11-14T00:00:02Z",annotatorId:"researcher-1",annotationProtocolVersion:"rubric-v1",overlapCategory:"LOWER-OVERLAP",groupId:"g",split:"test"};
+const first={scenarioId:"case",startedAt:"2026-11-14T00:00:01Z"},retry={scenarioId:"case",startedAt:"2026-11-14T00:00:03Z"};
+assert.equal(joinTestReferences([retry],[item],[first,retry])[0].reference.recordedBeforePrediction,false);
+assert.equal(joinTestReferences([retry],[{...item,firstPredictionAt:first.startedAt}])[0].reference.recordedBeforePrediction,false);
+const old={...item};delete old.annotatorId;delete old.annotationProtocolVersion;
+const exported=await buildResearchExport({analysisContract:sealed,testCases:[old],scanLogs:[retry]});
+assert.equal(exported.records[0].annotatorId,null);
+assert.ok(exported.researchReadiness.caseIssues.case.includes("annotatorId"));
+assert.throws(()=>joinTestReferences([{...retry,overlapCategory:"DIRECT"}],[item]),/overlapCategory mismatch/);
+console.log("research drafts/seals, metadata export, no retrospective label enrichment and earliest-exposure checks passed");

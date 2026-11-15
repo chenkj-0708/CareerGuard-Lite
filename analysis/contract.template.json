@@ -1,5 +1,8 @@
 {
-  "analysisVersion": "rq1-thesis-v1",
+  "analysisVersion": "rq1-single-annotator-v1",
+  "annotationMode": "single",
+  "evidenceNotes": "",
+  "annotatorId": null,
   "validationTieBreak": "textOnly",
   "lowerOverlapMinGroups": null,
   "sealedBeforeHeldOut": false,
@@ -7,7 +10,7 @@
   "conformancePassed": false,
   "leakageAuditPassed": false,
   "overlapTaxonomySealed": false,
-  "note": "Template only. Actual independent governance evidence must be completed and sealed before held-out access. The thesis does not specify a numerical lower-overlap minimum or tie branch; these cannot be inferred from test outcomes.",
+  "note": "Single-researcher exploratory study template, not the original dual-annotator thesis protocol. Fill actual annotator/protocol IDs and retain evidence before held-out access. Every included record needs matching annotatorId, annotationProtocolVersion and reference.recordedBeforePrediction=true. Inter-rater reliability is not applicable. Do not retrospectively certify old labels or choose support floors from test outcomes.",
   "annotationProtocolVersion": null,
   "unresolvedCrossSplitPairs": null,
   "lowerOverlapClassMinGroups": null

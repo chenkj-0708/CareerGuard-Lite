@@ -3,22 +3,35 @@ const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((
 function render(record) {
   const result = record.displayedResult;
   const reasons = explanationHtml(record, result);
-  const backend = record.escalation.status === "completed"
-    ? `<p class="success">Backend verification completed.</p>`
-    : record.escalation.status === "unavailable" ? `<p class="warning">Backend unavailable; local result is shown.</p>` : "";
+  const backend = backendHtml(record, result);
   elements.result.innerHTML = `
     <h2>CareerGuard risk result</h2>
     <div><span class="score ${result.tier}">${result.score}</span> / 100 · <span class="tier ${result.tier}">${result.tier} concern</span></div>
-    <small>Extraction sufficiency ${result.ExtractionSufficiency}% · Tier boundary distance ${result.TierBoundaryDistance}% · ${record.totalLatencyMs} ms</small><h3>Local evidence</h3>${reasons}<h3>External corroboration</h3>${backend}
-    ${(result.backend ? result.backend.contextReasons.map(reason => `<p>${escapeHtml(reason.message)}</p>`).join("") || "<p>No new context in the authorised index; this does not establish uniqueness or safety.</p>" : "<p>Not requested or unavailable.</p>")}
+    <small>Content reading completeness: ${Number.isFinite(result.ExtractionSufficiency) ? result.ExtractionSufficiency+"%" : "unknown"} (not prediction accuracy) · ${Number.isFinite(record.totalLatencyMs) ? record.totalLatencyMs+" ms" : "timing not recorded"}</small>
+    <details class="technical-details"><summary>Technical details</summary><p>Distance from risk-tier boundary: ${Number.isFinite(result.TierBoundaryDistance) ? result.TierBoundaryDistance+"%" : "unknown"}. A smaller value means the score is closer to a tier boundary. This is not confidence or accuracy.</p></details>
+    <h3>Local evidence</h3>${reasons}<h3>Duplicate listing context</h3>${backend}
     <h3>Recommended action</h3><p>${result.tier === "low" ? "Verify the employer independently before sharing sensitive information." : "Do not make payment. Verify the employer through an independent official channel before continuing."}</p>`;
   elements.result.hidden = false;
+}
+
+function backendHtml(record, result) {
+  const status = record.escalation?.status;
+  if (status === "pending") return '<p class="backend-status">Lookup in progress. The local result is ready to use.</p>';
+  if (status === "unavailable") return '<p class="warning backend-status">Backend unavailable. The local result is retained; duplicate listing context could not be checked.</p>';
+  if (status === "not-required") return '<p class="backend-status">Lookup was not requested for this scan.</p>';
+  if (status === "completed") {
+    const context = result.backend?.contextReasons || [];
+    return '<p class="success backend-status">Lookup completed. Context adds no points and does not change the risk tier.</p>' +
+      (context.length ? context.map(reason => `<p>${escapeHtml(reason.message)}</p>`).join("") : '<p>The configured index returned no duplicate context meeting the display criteria. This does not establish uniqueness or safety.</p>');
+  }
+  return '<p class="backend-status">Lookup status unknown.</p>';
 }
 
 function explanationHtml(record, result) {
   if (record.interfaceCondition !== "explanation") return "";
   if (result.reasons?.length) {
-    return `<ul>${result.reasons.map((reason) => `<li><strong>${escapeHtml(reason.role || "scored")}:</strong> ${escapeHtml(reason.message)}</li>`).join("")}</ul>`;
+    const roles = { scored: "Scoring signal", context: "Context (no points)", uncertainty: "Information limitation (no points)" };
+    return `<ul>${result.reasons.map((reason) => `<li><strong>${roles[reason.role || "scored"] || "Other information"}:</strong> ${escapeHtml(reason.message)}</li>`).join("")}</ul>`;
   }
   if (result.tier === "low") {
     return `<p class="explanation">No major warning signals were detected in the visible job text and page information.</p>`;
@@ -41,7 +54,7 @@ async function scan() {
     elements.status.textContent = response?.error || "The page could not be scanned.";
     return;
   }
-  elements.status.textContent = `Case ${response.record.scenarioId}: ${response.record.page.pageStatus}.`;
+  elements.status.textContent = response.record.scenarioId ? `Case ${response.record.scenarioId}: ${response.record.page.pageStatus}.` : "Local scan completed.";
   render(response.record);
 }
 
@@ -57,6 +70,6 @@ elements.dashboard.addEventListener("click", () => chrome.runtime.openOptionsPag
 chrome.runtime.onMessage.addListener(message => {
   if (message.type === "CG_LOCAL_RESULT" && elements.scan.disabled) {
     render(message.record);
-    elements.status.textContent = "Local result ready; checking optional corroboration…";
+    elements.status.textContent = "Local result ready; backend lookup in progress.";
   }
 });

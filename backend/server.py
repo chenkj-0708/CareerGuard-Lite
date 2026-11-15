@@ -98,7 +98,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         with self.server.protection.lock:
             token = self.server.protection.issue()
-        self.reply({"ok": True, "token": token, "expires_in": 7200})
+        self.reply({"ok": True, "token": token, "expires_in": 7200,
+                    "indexAvailable": self.server.engine.entries is not None})
 
     def do_POST(self):
         if not self.gate():

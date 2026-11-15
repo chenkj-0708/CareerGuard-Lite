@@ -1,19 +1,19 @@
 # Synthetic CareerGuard listing scenarios
 
-This folder contains 40 controlled, fictional job-listing pages:
+This folder contains 60 controlled, fictional job-listing pages:
 
-- `uncertain-01.html` to `uncertain-20.html`
-- `elevated-01.html` to `elevated-20.html`
+- `uncertain-01.html` to `uncertain-30.html`
+- `elevated-01.html` to `elevated-30.html`
 
 Start a local fixture server from the repository root:
 
 ```powershell
-python -m http.server 8000 --directory extension/fixtures/synthetic
+python -m http.server 8000 --directory fixtures/synthetic
 ```
 
 Open a page such as `http://127.0.0.1:8000/uncertain-01.html` and scan it with CareerGuard Lite. The extractor uses the fixture's canonical `.example` source URL so URL/domain signals behave like a hosted page instead of treating localhost as the source.
 
-Every page has a bottom-right **Next listing** button. Uncertain pages cycle only through uncertain scenarios, while elevated pages cycle only through elevated scenarios. Page 20 wraps back to page 1.
+Every page has a bottom-right **Next listing** button. Uncertain pages cycle only through uncertain scenarios, while elevated pages cycle only through elevated scenarios. Page 20 links to page 21; page 30 wraps back to page 1.
 
 `scenario_manifest.csv` and `scenario_manifest.json` list the intended label and constructed warning signals for each page.
 

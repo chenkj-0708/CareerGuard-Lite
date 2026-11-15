@@ -17,6 +17,10 @@ UNCERTAIN_ROLES = [
     "Business Support Associate", "Client Service Trainee", "Digital Records Assistant",
     "Online Sales Support Trainee", "Temporary Office Coordinator", "Remote Survey Assistant",
     "Junior Account Support Officer", "General Support Executive",
+    "Remote Appointment Coordinator", "Junior Community Assistant", "Customer Onboarding Trainee",
+    "Digital Catalogue Coordinator", "Part-Time Research Clerk", "Remote Event Support Assistant",
+    "Junior Order Support Associate", "Content Review Trainee", "Scheduling Support Executive",
+    "Temporary Membership Assistant",
 ]
 
 ELEVATED_ROLES = [
@@ -27,6 +31,10 @@ ELEVATED_ROLES = [
     "Overseas Job Registration Assistant", "Online Reshipping Coordinator", "Guaranteed Income Sales Agent",
     "Telegram Recruitment Assistant", "Remote Banking Verification Agent", "No-Interview Data Assistant",
     "International Transfer Assistant", "Immediate Start Freelance Clerk",
+    "Remote Invoice Processing Agent", "Express Equipment Registration Clerk", "Online Task Rewards Agent",
+    "Home-Based Account Activation Assistant", "Priority Travel Booking Agent", "Digital Purchase Support Clerk",
+    "Remote Payroll Verification Trainee", "Express Merchant Onboarding Agent", "Online Assignment Coordinator",
+    "Immediate Placement Support Officer",
 ]
 
 UNCERTAIN_VARIANTS = [
@@ -95,7 +103,8 @@ def common_description(role: str) -> str:
 
 def build_scenario(label: str, index: int, role: str, variant: dict) -> dict:
     identifier = f"{label}-{index:02d}"
-    next_index = 1 if index == 20 else index + 1
+    role_count = len(UNCERTAIN_ROLES if label == "uncertain" else ELEVATED_ROLES)
+    next_index = 1 if index == role_count else index + 1
     company = f"{('Prospect' if label == 'uncertain' else 'Rapid')} {index:02d} Solutions"
     source_url = f"https://jobs-{identifier}.example/listing/{identifier}"
     if label == "uncertain":
@@ -166,7 +175,7 @@ def main() -> None:
         writer.writeheader()
         for scenario in public:
             writer.writerow({**scenario, "signals": "|".join(scenario["signals"])})
-    print(f"Generated {len(scenarios)} scenarios: 20 uncertain and 20 elevated.")
+    print(f"Generated {len(scenarios)} scenarios: {len(UNCERTAIN_ROLES)} uncertain and {len(ELEVATED_ROLES)} elevated.")
 
 
 if __name__ == "__main__":

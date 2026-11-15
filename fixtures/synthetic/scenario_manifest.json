@@ -300,7 +300,7 @@
   },
   {
     "id": "uncertain-20",
-    "next_file": "uncertain-01.html",
+    "next_file": "uncertain-21.html",
     "label": "uncertain",
     "title": "General Support Executive",
     "company": "Prospect 20 Solutions",
@@ -311,6 +311,163 @@
       "pressure_language",
       "off_platform_contact",
       "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-21",
+    "next_file": "uncertain-22.html",
+    "label": "uncertain",
+    "title": "Remote Appointment Coordinator",
+    "company": "Prospect 21 Solutions",
+    "source_url": "https://jobs-uncertain-21.example/listing/uncertain-21",
+    "apply_url": "https://forms.candidate-intake.example/application/uncertain-21",
+    "email": "",
+    "signals": [
+      "pressure_language",
+      "minimal_screening",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-22",
+    "next_file": "uncertain-23.html",
+    "label": "uncertain",
+    "title": "Junior Community Assistant",
+    "company": "Prospect 22 Solutions",
+    "source_url": "https://jobs-uncertain-22.example/listing/uncertain-22",
+    "apply_url": "https://apply-now.example/application/uncertain-22",
+    "email": "hiringdesk@gmail.com",
+    "signals": [
+      "pressure_language",
+      "minimal_screening",
+      "free_email_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-23",
+    "next_file": "uncertain-24.html",
+    "label": "uncertain",
+    "title": "Customer Onboarding Trainee",
+    "company": "Prospect 23 Solutions",
+    "source_url": "https://jobs-uncertain-23.example/listing/uncertain-23",
+    "apply_url": "https://candidate-chat.example/application/uncertain-23",
+    "email": "",
+    "signals": [
+      "off_platform_contact",
+      "minimal_screening",
+      "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-24",
+    "next_file": "uncertain-25.html",
+    "label": "uncertain",
+    "title": "Digital Catalogue Coordinator",
+    "company": "Prospect 24 Solutions",
+    "source_url": "https://jobs-uncertain-24.example/listing/uncertain-24",
+    "apply_url": "https://quick-forms.example/application/uncertain-24",
+    "email": "",
+    "signals": [
+      "pressure_language",
+      "off_platform_contact",
+      "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-25",
+    "next_file": "uncertain-26.html",
+    "label": "uncertain",
+    "title": "Part-Time Research Clerk",
+    "company": "Prospect 25 Solutions",
+    "source_url": "https://jobs-uncertain-25.example/listing/uncertain-25",
+    "apply_url": "https://forms.candidate-intake.example/application/uncertain-25",
+    "email": "",
+    "signals": [
+      "pressure_language",
+      "minimal_screening",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-26",
+    "next_file": "uncertain-27.html",
+    "label": "uncertain",
+    "title": "Remote Event Support Assistant",
+    "company": "Prospect 26 Solutions",
+    "source_url": "https://jobs-uncertain-26.example/listing/uncertain-26",
+    "apply_url": "https://apply-now.example/application/uncertain-26",
+    "email": "hiringdesk@gmail.com",
+    "signals": [
+      "pressure_language",
+      "minimal_screening",
+      "free_email_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-27",
+    "next_file": "uncertain-28.html",
+    "label": "uncertain",
+    "title": "Junior Order Support Associate",
+    "company": "Prospect 27 Solutions",
+    "source_url": "https://jobs-uncertain-27.example/listing/uncertain-27",
+    "apply_url": "https://candidate-chat.example/application/uncertain-27",
+    "email": "",
+    "signals": [
+      "off_platform_contact",
+      "minimal_screening",
+      "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-28",
+    "next_file": "uncertain-29.html",
+    "label": "uncertain",
+    "title": "Content Review Trainee",
+    "company": "Prospect 28 Solutions",
+    "source_url": "https://jobs-uncertain-28.example/listing/uncertain-28",
+    "apply_url": "https://quick-forms.example/application/uncertain-28",
+    "email": "",
+    "signals": [
+      "pressure_language",
+      "off_platform_contact",
+      "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-29",
+    "next_file": "uncertain-30.html",
+    "label": "uncertain",
+    "title": "Scheduling Support Executive",
+    "company": "Prospect 29 Solutions",
+    "source_url": "https://jobs-uncertain-29.example/listing/uncertain-29",
+    "apply_url": "https://forms.candidate-intake.example/application/uncertain-29",
+    "email": "",
+    "signals": [
+      "pressure_language",
+      "minimal_screening",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "uncertain-30",
+    "next_file": "uncertain-01.html",
+    "label": "uncertain",
+    "title": "Temporary Membership Assistant",
+    "company": "Prospect 30 Solutions",
+    "source_url": "https://jobs-uncertain-30.example/listing/uncertain-30",
+    "apply_url": "https://apply-now.example/application/uncertain-30",
+    "email": "hiringdesk@gmail.com",
+    "signals": [
+      "pressure_language",
+      "minimal_screening",
+      "free_email_contact",
       "external_application_domain"
     ]
   },
@@ -644,7 +801,7 @@
   },
   {
     "id": "elevated-20",
-    "next_file": "elevated-01.html",
+    "next_file": "elevated-21.html",
     "label": "elevated",
     "title": "Immediate Start Freelance Clerk",
     "company": "Rapid 20 Solutions",
@@ -657,6 +814,179 @@
       "minimal_screening",
       "messaging_contact",
       "external_application_domain"
+    ]
+  },
+  {
+    "id": "elevated-21",
+    "next_file": "elevated-22.html",
+    "label": "elevated",
+    "title": "Remote Invoice Processing Agent",
+    "company": "Rapid 21 Solutions",
+    "source_url": "https://jobs-elevated-21.example/listing/elevated-21",
+    "apply_url": "https://bit.ly/careerguard-synthetic-21",
+    "email": "fastjobs@gmail.com",
+    "signals": [
+      "advance_fee",
+      "sensitive_information",
+      "pressure_language",
+      "off_platform_contact",
+      "shortened_application_link",
+      "free_email_contact"
+    ]
+  },
+  {
+    "id": "elevated-22",
+    "next_file": "elevated-23.html",
+    "label": "elevated",
+    "title": "Express Equipment Registration Clerk",
+    "company": "Rapid 22 Solutions",
+    "source_url": "https://jobs-elevated-22.example/listing/elevated-22",
+    "apply_url": "https://tinyurl.com/careerguard-synthetic-22",
+    "email": "",
+    "signals": [
+      "advance_fee",
+      "sensitive_information",
+      "minimal_screening",
+      "off_platform_contact",
+      "shortened_application_link"
+    ]
+  },
+  {
+    "id": "elevated-23",
+    "next_file": "elevated-24.html",
+    "label": "elevated",
+    "title": "Online Task Rewards Agent",
+    "company": "Rapid 23 Solutions",
+    "source_url": "https://jobs-elevated-23.example/listing/elevated-23",
+    "apply_url": "https://instant-career.example/register-23",
+    "email": "opportunitydesk@yahoo.com",
+    "signals": [
+      "advance_fee",
+      "unrealistic_income",
+      "pressure_language",
+      "free_email_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "elevated-24",
+    "next_file": "elevated-25.html",
+    "label": "elevated",
+    "title": "Home-Based Account Activation Assistant",
+    "company": "Rapid 24 Solutions",
+    "source_url": "https://jobs-elevated-24.example/listing/elevated-24",
+    "apply_url": "https://candidate-verification.example/apply-24",
+    "email": "",
+    "signals": [
+      "sensitive_information",
+      "off_platform_contact",
+      "minimal_screening",
+      "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "elevated-25",
+    "next_file": "elevated-26.html",
+    "label": "elevated",
+    "title": "Priority Travel Booking Agent",
+    "company": "Rapid 25 Solutions",
+    "source_url": "https://jobs-elevated-25.example/listing/elevated-25",
+    "apply_url": "https://bit.ly/careerguard-synthetic-25",
+    "email": "fastjobs@gmail.com",
+    "signals": [
+      "advance_fee",
+      "sensitive_information",
+      "pressure_language",
+      "off_platform_contact",
+      "shortened_application_link",
+      "free_email_contact"
+    ]
+  },
+  {
+    "id": "elevated-26",
+    "next_file": "elevated-27.html",
+    "label": "elevated",
+    "title": "Digital Purchase Support Clerk",
+    "company": "Rapid 26 Solutions",
+    "source_url": "https://jobs-elevated-26.example/listing/elevated-26",
+    "apply_url": "https://tinyurl.com/careerguard-synthetic-26",
+    "email": "",
+    "signals": [
+      "advance_fee",
+      "sensitive_information",
+      "minimal_screening",
+      "off_platform_contact",
+      "shortened_application_link"
+    ]
+  },
+  {
+    "id": "elevated-27",
+    "next_file": "elevated-28.html",
+    "label": "elevated",
+    "title": "Remote Payroll Verification Trainee",
+    "company": "Rapid 27 Solutions",
+    "source_url": "https://jobs-elevated-27.example/listing/elevated-27",
+    "apply_url": "https://instant-career.example/register-27",
+    "email": "opportunitydesk@yahoo.com",
+    "signals": [
+      "advance_fee",
+      "unrealistic_income",
+      "pressure_language",
+      "free_email_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "elevated-28",
+    "next_file": "elevated-29.html",
+    "label": "elevated",
+    "title": "Express Merchant Onboarding Agent",
+    "company": "Rapid 28 Solutions",
+    "source_url": "https://jobs-elevated-28.example/listing/elevated-28",
+    "apply_url": "https://candidate-verification.example/apply-28",
+    "email": "",
+    "signals": [
+      "sensitive_information",
+      "off_platform_contact",
+      "minimal_screening",
+      "messaging_contact",
+      "external_application_domain"
+    ]
+  },
+  {
+    "id": "elevated-29",
+    "next_file": "elevated-30.html",
+    "label": "elevated",
+    "title": "Online Assignment Coordinator",
+    "company": "Rapid 29 Solutions",
+    "source_url": "https://jobs-elevated-29.example/listing/elevated-29",
+    "apply_url": "https://bit.ly/careerguard-synthetic-29",
+    "email": "fastjobs@gmail.com",
+    "signals": [
+      "advance_fee",
+      "sensitive_information",
+      "pressure_language",
+      "off_platform_contact",
+      "shortened_application_link",
+      "free_email_contact"
+    ]
+  },
+  {
+    "id": "elevated-30",
+    "next_file": "elevated-01.html",
+    "label": "elevated",
+    "title": "Immediate Placement Support Officer",
+    "company": "Rapid 30 Solutions",
+    "source_url": "https://jobs-elevated-30.example/listing/elevated-30",
+    "apply_url": "https://tinyurl.com/careerguard-synthetic-30",
+    "email": "",
+    "signals": [
+      "advance_fee",
+      "sensitive_information",
+      "minimal_screening",
+      "off_platform_contact",
+      "shortened_application_link"
     ]
   }
 ]

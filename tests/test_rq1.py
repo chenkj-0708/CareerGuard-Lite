@@ -19,6 +19,82 @@ def corpus():
 
 
 class RQ1Tests(unittest.TestCase):
+    def test_warmup_cannot_conflict_with_measured_reference(self):
+        rows = corpus()
+        warmup = copy.deepcopy(rows[0])
+        warmup.update(timingPhase="warmup", groundTruth="elevated")
+        result = evaluate_rq1([warmup] + rows, {"validationTieBreak":"textOnly"}, resamples=0)
+        self.assertEqual(result["exclusions"]["warmup"], 1)
+        self.assertNotIn("conflicting_repeat_predictions_or_labels", result["problems"])
+
+    def single_study(self):
+        rows = corpus()
+        for r in rows:
+            r.pop("annotatorLabels")
+            r.update(annotatorId="researcher-1", annotationProtocolVersion="single-rubric-v1",
+                     reference={"recordedBeforePrediction": True})
+        contract = {"analysisVersion":"rq1-single-annotator-v1", "annotationMode":"single",
+                    "annotatorId":"researcher-1", "annotationProtocolVersion":"single-rubric-v1",
+                    "validationTieBreak":"textOnly", "lowerOverlapMinGroups":5,
+                    "lowerOverlapClassMinGroups":5, "sealedBeforeHeldOut":True,
+                    "precisionJustified":True, "conformancePassed":True, "leakageAuditPassed":True,
+                    "overlapTaxonomySealed":True, "unresolvedCrossSplitPairs":0}
+        return rows, contract
+
+    def test_single_reference_can_report_exploratory_improvement_without_second_label(self):
+        rows, contract = self.single_study()
+        result = evaluate_rq1(rows, contract, resamples=30)
+        self.assertEqual(result["status"], "Exploratory Improvement")
+        self.assertEqual(result["missing_gates"], [])
+        self.assertEqual(result["reference_agreement"]["status"], "not_applicable")
+        self.assertIsNone(result["reference_agreement"]["linear_weighted_kappa"])
+        self.assertIn("single-researcher", result["claim_scope"])
+        self.assertTrue(result["limitations"])
+
+    def test_single_reference_checks_every_record(self):
+        for field, value in (("annotatorId", None), ("annotatorId", "another-person"),
+                             ("annotationProtocolVersion", None), ("reference", None),
+                             ("reference", {"recordedBeforePrediction":False})):
+            with self.subTest(field=field, value=value):
+                rows, contract = self.single_study()
+                rows[-1][field] = value
+                result = evaluate_rq1(rows, contract, resamples=0)
+                self.assertEqual(result["status"], "Inconclusive")
+                self.assertTrue(result["missing_gates"])
+
+    def test_single_mode_does_not_bypass_sealing_or_version(self):
+        rows, contract = self.single_study()
+        contract["sealedBeforeHeldOut"] = False
+        result = evaluate_rq1(rows, contract, resamples=0)
+        self.assertEqual(result["status"], "Inconclusive")
+        self.assertIn("sealedBeforeHeldOut", result["missing_gates"])
+        contract["analysisVersion"] = "rq1-thesis-v1"
+        self.assertIn("single_annotator_analysis_version", evaluate_rq1(rows, contract, resamples=0)["problems"])
+
+    def test_single_no_improvement_is_reported_honestly(self):
+        rows, contract = self.single_study()
+        for r in rows:
+            if r["split"] == "test":
+                r["baselines"]["multiSignal"] = copy.deepcopy(r["baselines"]["metadataOnly"])
+        self.assertEqual(evaluate_rq1(rows, contract, resamples=0)["status"], "No Exploratory Improvement")
+
+    def test_repeat_cannot_hide_conflicting_annotation_provenance(self):
+        rows, contract = self.single_study()
+        repeat = copy.deepcopy(rows[0])
+        repeat["reference"]["recordedBeforePrediction"] = False
+        rows.append(repeat)
+        self.assertIn("conflicting_repeat_predictions_or_labels", evaluate_rq1(rows, contract, resamples=0)["problems"])
+
+    def test_dual_subset_agreement_cannot_pass_complete_reference_gate(self):
+        rows, contract = self.single_study()
+        contract.update(annotationMode="dual", analysisVersion="rq1-thesis-v1")
+        for r in rows[:3]:
+            r["annotatorLabels"] = [r["groundTruth"], r["groundTruth"]]
+        result = evaluate_rq1(rows, contract, resamples=0)
+        self.assertEqual(result["reference_agreement"]["linear_weighted_kappa"], 1)
+        self.assertEqual(result["status"], "Inconclusive")
+        self.assertIn("complete_dual_annotations", result["missing_gates"])
+
     def test_equal_group_weight(self):
         rows=[row(str(i),"large","test","elevated","low","low","low") for i in range(50)]+[row("one","small","test","low","low","low","low")]
         self.assertEqual(maoe(rows,"textOnly"),1)

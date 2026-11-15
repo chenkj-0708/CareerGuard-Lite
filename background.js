@@ -1,5 +1,6 @@
 import { combineBackend, scoreAll } from "./lib/scoring.js";
 import { CONFIG_ID } from "./lib/risk-rules.js";
+import { BACKEND_URL } from "./lib/backend-client.js";
 import { scenarioIdForUrl } from "./lib/scan-statistics.js";
 import { matchTestCase } from "./lib/test-cases.js";
 import { validatePageSignal, PageSignalValidationError } from "./lib/page-signal.js";
@@ -9,7 +10,7 @@ const DEFAULTS = {
   mode: "multiSignal",
   showReasons: true,
   autoEscalate: true,
-  backendUrl: "http://127.0.0.1:8765"
+  backendUrl: BACKEND_URL
 };
 
 const storageGet = (keys) => chrome.storage.local.get(keys);
@@ -144,6 +145,8 @@ async function scan(options = {}) {
 async function performScan(options, attempt) {
   await purgeLocalHistory();
   const settings = { ...DEFAULTS, ...(await storageGet(Object.keys(DEFAULTS))), ...options };
+  // Ignore legacy custom settings: the verifier is restricted to this loopback address.
+  settings.backendUrl = BACKEND_URL;
   attempt.stage = "tab";
   const tab = await activeTab(attempt);
   const { testCases = [] } = await storageGet(["testCases"]);
@@ -171,6 +174,16 @@ async function performScan(options, attempt) {
     throw Object.assign(new Error(FAILURE_REASONS.UNRELIABLE_EXTRACTION), { failureCode: "UNRELIABLE_EXTRACTION" });
   }
   attempt.stage = "scoring";
+  // Persist the earliest exposure separately from bounded scan history so a retry
+  // or history purge cannot turn a late reference into a prediction-blind one.
+  const referenceState = await storageGet(["testCases", "rq1HeldOutAccessAt"]);
+  const referenceUpdate = {};
+  if (testCase) {
+    referenceUpdate.testCases = (referenceState.testCases || []).map(item => item.scenarioId === testCase.scenarioId
+      ? { ...item, firstPredictionAt: item.firstPredictionAt || attempt.startedAt } : item);
+  }
+  if (options.split === "test" && !referenceState.rq1HeldOutAccessAt) referenceUpdate.rq1HeldOutAccessAt = attempt.startedAt;
+  if (Object.keys(referenceUpdate).length) await storageSet(referenceUpdate);
   const scoringStarted = performance.now();
   const baselines = scoreAll(page);
   const localScoringLatencyMs = Number((performance.now() - scoringStarted).toFixed(2));
@@ -183,6 +196,7 @@ async function performScan(options, attempt) {
   if (shouldEscalate) {
     const backendStarted = performance.now();
     const notification = chrome.runtime.sendMessage?.({ type: "CG_LOCAL_RESULT", record: {
+      scenarioId: attempt.scenarioId,
       page: { pageStatus: page.pageStatus }, displayedResult: selected,
       escalation: { attempted: true, status: "pending" }, interfaceCondition: settings.showReasons ? "explanation" : "score-only",
       totalLatencyMs: Number((performance.now() - started).toFixed(2))

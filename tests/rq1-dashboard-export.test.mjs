@@ -1,0 +1,68 @@
+// Functional end-to-end fixture only. None of these declarations are research evidence.
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import {createRequire} from "node:module";
+import {execFileSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
+const require=createRequire(import.meta.url);
+const {chromium}=require(process.env.CG_PLAYWRIGHT||"playwright");
+const browser=await chromium.launch({headless:true,channel:"msedge"});
+try {
+  const page=await browser.newPage();
+  await page.route("https://extension.test/**",route=>{
+    const name=new URL(route.request().url()).pathname.slice(1);
+    if(!["dashboard.html","dashboard.css","dashboard.js","lib/scan-statistics.js","lib/test-cases.js","lib/dashboard-metrics.js","lib/backend-client.js","lib/risk-rules.js","lib/research-protocol.js"].includes(name))return route.abort();
+    return route.fulfill({body:fs.readFileSync(new URL(`../${name}`,import.meta.url)),contentType:name.endsWith(".js")?"text/javascript":name.endsWith(".css")?"text/css":"text/html"});
+  });
+  await page.addInitScript(()=>{
+    globalThis.stored={scanLogs:[],extractionFailures:[],testCases:[]};
+    globalThis.chrome={storage:{local:{async get(){return structuredClone(stored)},async set(value){Object.assign(stored,structuredClone(value))}}},downloads:{download(options){fetch(options.url).then(r=>r.text()).then(text=>{globalThis.downloaded=text;});}}};
+  });
+  await page.goto("https://extension.test/dashboard.html");
+  await page.waitForFunction(()=>document.getElementById("researchStatus").textContent.includes("Unsealed"));
+  await page.fill("#researchAnnotator","researcher-1");await page.fill("#researchRubric","single-rubric-v1");
+  await page.fill("#researchMinGroups","5");await page.fill("#researchMinClass","5");await page.fill("#researchPairs","0");
+  for(const id of ["researchPrecision","researchConformance","researchLeakage","researchTaxonomy"])await page.check(`#${id}`);
+  await page.fill("#researchEvidence","Synthetic functional-test protocol only. Not an actual research audit or study.");
+  await page.click("#sealResearch");
+  await page.waitForFunction(()=>document.getElementById("researchStatus").textContent.startsWith("Sealed at"));
+  assert.equal(await page.locator("#researchAnnotator").isDisabled(),true);
+  if(process.env.CG_RESEARCH_SCREENSHOT)await page.locator("section").filter({has:page.locator("#researchForm")}).screenshot({path:process.env.CG_RESEARCH_SCREENSHOT});
+  for(const split of ["validation","test"])for(let i=0;i<15;i++){
+    const id=`${split}-${i}`;
+    await page.fill("#testId",id);await page.fill("#testUrl",`https://example.com/${id}`);
+    await page.selectOption("#testLabel",["low","uncertain","elevated"][i%3]);
+    await page.fill("#testGroup",`group-${id}`);await page.selectOption("#testSplit",split);await page.selectOption("#testOverlap","LOWER-OVERLAP");
+    await page.click('#caseForm button[type="submit"]');
+    await page.waitForFunction(id=>document.getElementById("caseStatus").textContent.includes(`Saved ${id}.`),id);
+  }
+  await page.evaluate(()=>{
+    const result=tier=>({tier,score:{low:5,uncertain:45,elevated:80}[tier]});
+    stored.scanLogs=stored.testCases.map((item,i)=>{
+      const truth=item.groundTruth,wrong=truth==="low"?"elevated":"low",fused=item.split==="validation"?truth:"uncertain";
+      return {id:`run-${i}`,scenarioId:item.scenarioId,startedAt:new Date().toISOString(),createdAt:new Date().toISOString(),
+        groupId:item.groupId,split:item.split,configId:"thesis-primary-50-50-v1",groundTruth:null,page:{pageStatus:"scoreable",title:item.scenarioId},
+        baselines:{textOnly:result(item.split==="validation"?wrong:truth),metadataOnly:result(item.split==="validation"?truth:wrong),multiSignal:result(fused),
+          sensitivities:Object.fromEntries(["priorWeight","rawScaling","lowerBoundaries","upperBoundaries"].map(k=>[k,result(fused)]))}};
+    });
+  });
+  await page.click("#exportJson");await page.waitForFunction(()=>globalThis.downloaded);
+  const exported=await page.evaluate(()=>JSON.parse(downloaded));
+  assert.equal(exported.analysisContract.sealedBeforeHeldOut,true);
+  assert.equal(exported.records.length,30);
+  assert.ok(exported.records.every(r=>r.annotatorId==="researcher-1"&&r.annotationProtocolVersion==="single-rubric-v1"&&r.overlapCategory==="LOWER-OVERLAP"&&r.reference.recordedBeforePrediction));
+  assert.equal(await page.evaluate(()=>stored.scanLogs.some(r=>r.groundTruth!==null)),false);
+  const run=payload=>JSON.parse(execFileSync(process.env.CG_PYTHON||"python",["-c","import sys,json; from analysis.evaluate import evaluate; print(json.dumps(evaluate(json.load(sys.stdin),10)))"],{cwd:fileURLToPath(new URL("..",import.meta.url)),input:JSON.stringify(payload),encoding:"utf8"}));
+  const report=run(exported);
+  assert.equal(report.rq1.status,"Exploratory Improvement");
+  assert.equal(report.rq1.test_support.groups,15);assert.equal(report.rq1.validation_support.groups,15);
+  assert.deepEqual(report.rq1.missing_gates,[]);
+  assert.ok(report.rq1.primary.delta_maoe>0);
+  await page.click("#reviseResearch");await page.waitForFunction(()=>stored.analysisContract.sealedBeforeHeldOut===false);
+  await page.click("#sealResearch");
+  await page.waitForFunction(()=>document.getElementById("researchStatus").textContent.includes("retrospectively"));
+  assert.equal(await page.evaluate(()=>stored.analysisContract.sealedBeforeHeldOut),false);
+  const unsealed={...exported,analysisContract:{...exported.analysisContract,sealedBeforeHeldOut:false}};
+  assert.equal(run(unsealed).rq1.status,"Inconclusive");
+  console.log("dashboard controls -> reference registration -> JSON export -> Python RQ1 analysis passed; no manual JSON enrichment and no retroactive sealing");
+}finally{await browser.close();}

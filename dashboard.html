@@ -10,11 +10,38 @@
   <main>
     <section class="settings panel">
       <h2>Runtime settings</h2>
-      <label>Backend URL<input id="backendUrl" type="url" value="http://127.0.0.1:8765"></label>
-      <button id="saveSettings">Save settings</button><button id="health">Test backend</button><span id="healthStatus"></span>
+      <label>Backend URL (fixed local address)<input id="backendUrl" type="url" value="http://127.0.0.1:8765" readonly></label>
+      <button id="health">Test backend</button><span id="healthStatus" role="status">Service: not checked · Index: not checked</span>
     </section>
     <section class="cards" id="summary"></section>
+    <p id="metricsNote" class="metrics-note"></p>
     <section class="panel"><h2>Scan success and speed</h2><div id="scanSummary"></div></section>
+    <section class="panel">
+      <h2>RQ1 research protocol</h2>
+      <p>Save your annotator and rubric IDs before recording reference answers. Document the actual checks below. A draft can be analysed, but missing gates remain Inconclusive. Sealing does not validate the evidence you declare.</p>
+      <form id="researchForm">
+        <fieldset id="researchFields">
+          <div class="research-grid">
+            <label>Annotator ID<input id="researchAnnotator" placeholder="researcher-1" maxlength="80" pattern="[A-Za-z0-9_.-]{1,80}"></label>
+            <label>Annotation protocol version<input id="researchRubric" placeholder="single-rubric-v1" maxlength="80" pattern="[A-Za-z0-9_.-]{1,80}"></label>
+            <label>Validation tie-break<select id="researchTie"><option value="textOnly">Text-only</option><option value="metadataOnly">Metadata-only</option></select></label>
+            <label>Minimum lower-overlap groups<input id="researchMinGroups" type="number" min="1" step="1"></label>
+            <label>Minimum lower-overlap groups per class<input id="researchMinClass" type="number" min="1" step="1"></label>
+            <label>Unresolved cross-split pairs<input id="researchPairs" type="number" min="0" step="1"></label>
+          </div>
+          <div class="research-checks">
+            <label><input id="researchPrecision" type="checkbox"> Precision / information-size justification documented</label>
+            <label><input id="researchConformance" type="checkbox"> Implementation conformance checks completed</label>
+            <label><input id="researchLeakage" type="checkbox"> Browser-corpus leakage audit completed</label>
+            <label><input id="researchTaxonomy" type="checkbox"> Overlap taxonomy fixed before evaluation</label>
+          </div>
+          <label>Evidence references / protocol notes<textarea id="researchEvidence" maxlength="4000" rows="3" placeholder="Identify the actual rubric, audit, precision justification and conformance records. Do not paste page content or personal data."></textarea></label>
+        </fieldset>
+        <div class="research-actions"><button type="submit" id="saveResearch">Save draft</button><button type="button" id="sealResearch">Seal protocol before held-out access</button><button type="button" id="reviseResearch">Revise as unsealed draft</button></div>
+      </form>
+      <p id="researchStatus" role="status"></p><p id="researchReadiness"></p>
+      <p>Export JSON includes this analysis contract, joined reference metadata and all sensitivity predictions. Run: <code>python analysis/evaluate.py path/to/careerguard-evaluation.json --output path/to/report.json</code>. CSV is a summary, not the full RQ1 input.</p>
+    </section>
     <section class="panel">
       <h2>Test pages and human answers</h2>
       <p>Register a page before scanning. Give it a fixed ID and enter your own answer without viewing system scores. The answer is stored separately and paired with predictions when you export. A single person's answer is a research reference, not confirmed fraud truth.</p>
@@ -24,13 +51,16 @@
         <label>Your answer<select id="testLabel"><option value="">Not labelled yet</option><option value="low">Low</option><option value="uncertain">Uncertain</option><option value="elevated">Elevated</option><option value="reference-insufficient">Insufficient information</option></select></label>
         <label>Group ID (optional)<input id="testGroup" placeholder="GROUP-001"></label>
         <label>Split<select id="testSplit"><option value="">Not assigned</option><option value="development">Development</option><option value="validation">Validation</option><option value="test">Test</option></select></label>
-        <button type="submit">Save test page</button>
+        <label>Reference overlap category<select id="testOverlap"><option value="">Not assigned</option><option value="DIRECT">Direct</option><option value="RELATED">Related</option><option value="LOWER-OVERLAP">Lower-overlap</option></select></label>
+        <p class="form-help">Overlap describes how closely your reference criteria match the scoring rules, not duplicate similarity. Fix the category before scanning. Use the versioned rubric.</p>
+        <label class="reference-refresh"><input id="testRefreshReference" type="checkbox"> Record a new reference now using the saved annotator/rubric IDs (updates the label time)</label>
+        <button type="submit">Save test page</button><button type="button" id="newCase">New / cancel edit</button>
       </form>
-      <p id="caseStatus" role="status"></p><div id="testCases"></div>
+      <p id="caseStatus" role="status"></p><p>Unchanged old answers keep their original metadata; missing annotator/rubric IDs are not filled retrospectively. Recording a new answer after a prediction is flagged as late. Deleting a case also deletes its reference answer and local scan records. Export anything you need to keep first. Clear scan history keeps registered cases, reference answers and protocol history.</p><div id="testCases"></div>
     </section>
     <section class="panel">
-      <div class="section-head"><div><h2>Captured evaluation records</h2><p>Each scan computes every local baseline from the same page. The selected mode is highlighted.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear logs</button></div></div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Page</th><th>Selected mode</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Full</th><th>Signals</th><th>Truth</th><th>Condition</th><th>Latency</th></tr></thead><tbody id="records"></tbody></table></div>
+      <div class="section-head"><div><h2>Captured evaluation records</h2><p>Each scan computes every local baseline from the same page. The Multi ✓ marks the primary method, not a correct prediction.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear scan history</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Case ID</th><th>Page</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Backend status</th><th>Signals</th><th>Truth</th><th>Latency</th></tr></thead><tbody id="records"></tbody></table></div>
     </section>
   </main>
   <script type="module" src="dashboard.js"></script>

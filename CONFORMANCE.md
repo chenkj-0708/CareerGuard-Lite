@@ -2,6 +2,14 @@
 
 Authority: `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`. PDF page numbers below are physical pages verified by extraction; the report's printed numbering is different.
 
+## 2026-11-13 annotation-method amendment
+
+The selected RQ1 design is now single-researcher exploratory reference agreement. `analysis/contract.template.json` explicitly selects `rq1-single-annotator-v1` / `annotationMode=single`; every included record must identify the annotator and rubric version and declare prediction-blind reference timing. Inter-rater agreement is not applicable. A complete run can report Exploratory Improvement, never the original dual-protocol Supported verdict. Grouping, held-out sealing, information-size, lower-overlap and sensitivity requirements remain. Legacy dual contracts remain supported, with complete per-record annotation coverage now enforced. See `analysis/SINGLE_ANNOTATOR_PROTOCOL.md` for data preparation, limitations and proposed thesis wording. The original PDF/DOCX has not been edited and its dual-annotator requirements are superseded only for this explicitly versioned amended study, not retrospectively satisfied.
+
+## 2026-11-14 dashboard-to-RQ1 export completion
+
+The dashboard collects annotation IDs, rubric overlap and the analysis contract, stamps new reference metadata at collection, and exports a Python-ready JSON payload. Drafts remain unsealed; a prospective seal requires documented declarations, is timestamped/hashed and cannot be created after locally recorded held-out access. Missing metadata on unchanged historical labels remains missing. Persistent first-prediction timestamps and earliest-attempt joins prevent late references becoming blind on retries or ordinary history purge. Warm-ups are excluded from RQ1. Functional integration testing covers dashboard controls -> reference registration -> JSON download -> Python analysis with 15 validation and 15 test groups; these are synthetic software fixtures, not completed research results. The original thesis and real research gates have not been filled or certified by these changes.
+
 | User issue | Formal source | Implemented change | Automated evidence |
 | --- | --- | --- | --- |
 | Fusion formula | PDF 79-80, Equations 4.1-4.4 | Zero-start evidence sums; 101/49 branch normalisation; 50/50 fusion; no shared bonus | scoring.test.mjs |

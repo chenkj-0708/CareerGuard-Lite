@@ -31,6 +31,9 @@ for(mode of ["success","offline","corrupted","timeout"]){
  if(mode==="timeout"){assert.ok(performance.now()-start>=1900);assert.ok(performance.now()-start<2600);}
 }
 assert.deepEqual(Object.keys(requests[0]).sort(),["requestId","schemaVersion","scenarioOrScanId","excerptHash","hashContractVersion","capabilityToken"].sort());
+assert.ok(notifications.length > 0);
+assert.match(notifications[0].record.scenarioId, /^page-v1-[a-f0-9]{64}$/);
+assert.equal(notifications[0].record.escalation.status, "pending");
 assert.match(requests[0].excerptHash,/^[a-f0-9]{64}$/);
 assert.ok(!JSON.stringify(requests).includes("example.com"));
 assert.ok(!JSON.stringify(stored).includes(page.visibleText));

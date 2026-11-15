@@ -1,6 +1,6 @@
 # CareerGuard Lite 0.2.0
 
-This implementation follows the formal contracts in `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`, Chapters 3 and 4. It is an advisory research prototype, not a calibrated fraud classifier. The backend provides hash-only, read-only duplicate corroboration.
+This implementation follows the local scoring contracts in `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`, Chapters 3 and 4. The RQ1 annotation design was amended to a single-researcher exploratory study on 2026-11-13; it is not the original dual-annotator protocol. It is an advisory research prototype, not a calibrated fraud classifier. The backend provides hash-only, read-only duplicate corroboration.
 
 ## Run
 
@@ -70,16 +70,22 @@ The server binds to 127.0.0.1, requires an exact extension origin, enforces JSON
 ## RQ1 analysis
 
 ```powershell
-python analysis/evaluate.py path/to/export.json --contract path/to/sealed-contract.json --output path/to/report.json
+python analysis/evaluate.py path/to/export.json --output path/to/report.json
 ```
 
-The export must contain independent reference annotations and a sealed `analysisContract`; a deliberately incomplete template is in `analysis/contract.template.json`. Each eligible record needs `scenarioId`, independent `groupId`, `split` (`validation`/`test`), `overlapCategory` (`DIRECT`/`RELATED`/`LOWER-OVERLAP`), `groundTruth`, `configId`, paired predictions and sensitivity predictions. Two original `annotatorLabels` and their `annotationProtocolVersion` are required for reliability gates. Labels/groups/overlap classifications must be joined independently after prediction; they are never inferred from system outputs or host platforms.
+The dashboard's **RQ1 research protocol** form stores the single annotator ID, annotation protocol version, validation tie rule, justified lower-overlap support floors and actual governance declarations. Save a draft before recording answers. Seal only after documenting the real prerequisites and before recording held-out labels or scans. A seal is timestamped and hashed; later edits invalidate it. Observed held-out access remains recorded when history or cases are deleted. These local controls cannot prove the truth of a declaration or detect undisclosed external access.
+
+The **Test pages and human answers** form collects `overlapCategory` as well as case/group/split. New or explicitly re-recorded references capture the saved `annotatorId`, `annotationProtocolVersion` and current label time. Unchanged legacy labels are never silently enriched. Reference timing is checked against the earliest retained attempt and the case's persistent first-prediction timestamp, so retries do not convert late labels into blind ones. Labels and annotation identities remain outside prediction and backend payloads.
+
+**Export JSON** embeds `analysisContract`, joined reference metadata, paired predictions, sensitivity predictions, failures and `researchReadiness`. The exported file runs directly with the command above; no manual JSON enrichment or separate `--contract` argument is required. Draft/incomplete exports remain downloadable for audit, but do not establish improvement. The readiness panel checks metadata; the Python runner performs independent-support, leakage and metric/sensitivity checks. CSV adds reference IDs/timing but remains a summary, not the full RQ1 input. The deliberately incomplete standalone template remains in `analysis/contract.template.json`. See [single-annotator instructions and thesis amendment](analysis/SINGLE_ANNOTATOR_PROTOCOL.md).
+
+Single mode reports inter-rater reliability as not applicable and uses `Exploratory Improvement` / `No Exploratory Improvement` rather than the original `Supported` verdict. Missing experimental gates still produce `Inconclusive`. Claims concern agreement with one researcher's references, not independent fraud validity. Contracts without `annotationMode` retain the legacy dual mode, which requires complete two-label coverage and reference reliability; old studies are not silently reinterpreted.
 
 The runner selects text-only or metadata-only by validation group-averaged MAOE. It compares the fixed branch with 50/50 fusion on held-out groups, weights each independent group equally, and reports the paired delta, group bootstrap, corrections/worsenings, LOWER-OVERLAP and other strata, class metrics, macro F1, confusion matrices, weighted/unweighted kappa, branch floor/saturation distributions and reference agreement.
 
 Predeclared sensitivity outputs include prior 58/42 weights, raw-evidence branch scaling, and 25/55 and 35/65 boundaries. The raw scaling (`min(100, 5 + E_branch)`) and text-only validation tie break are explicit implementation defaults because the thesis names these contracts without supplying those exact choices; they must be sealed before held-out access. Required lower-overlap group/class floors remain unset in the template and must be prospectively justified, never filled from outcomes.
 
-Cross-split groups and conflicting technical repeats are rejected. Synthetic/forced runs and reference-insufficient/failure cases do not enter class-dependent RQ1 metrics. Technical repeats are deduplicated by scenario identity. Missing prospective gates, insufficient independent/class/lower-overlap support, low reference reliability or directional sensitivity reversal produce Inconclusive. No bootstrap resample count is treated as additional independent information. Ranking metrics are not formal browser outcomes. Existing exports from earlier configurations are retained but excluded from formal RQ1.
+Cross-split groups and conflicting technical repeats are rejected. Synthetic/forced runs and reference-insufficient/failure cases do not enter class-dependent RQ1 metrics. Technical repeats are deduplicated by scenario identity. Missing prospective gates, insufficient independent/class/lower-overlap support, incomplete annotation provenance, low reference reliability in dual mode or directional sensitivity reversal produce Inconclusive. No bootstrap resample count is treated as additional independent information. Ranking metrics are not formal browser outcomes. Existing exports from earlier configurations are retained but excluded from formal RQ1.
 
 ## Validation and research boundaries
 
@@ -103,6 +109,8 @@ Every failed scan attempt is recorded in the JSON export's `extractionFailures` 
 ### Scan success and speed
 
 Registered research pages and manually supplied reference labels can be managed in the dashboard's **Test pages and human answers** form. Matching scans inherit the case ID/group/split, while labels remain separate from prediction and are joined only for display/export. Late labels, unknown IDs, ambiguous URLs and conflicts are explicit. See [TEST_PAGE_GUIDE.md](TEST_PAGE_GUIDE.md) for the step-by-step workflow. This records single-researcher references without inventing independent annotators or bypassing formal RQ1 gates.
+
+The dashboard's three comparison cards report descriptive agreement with the human reference using the first retained measured attempt per case and a shared eligible denominator. They exclude insufficient/missing/late or unverified references, legacy configurations, extraction failures and incomplete predictions; repeat, forced, synthetic, warm-up and unidentified records do not inflate agreement. Counts and exclusion reasons are shown. They are not the formal grouped RQ1 verdict. Test cases support edit/cancel and confirmed deletion of that case's registration, answer and retained scan records; **Clear scan history** retains registrations and answers. Backend settings are fixed to the loopback address above, and a two-second health check separately reports service connectivity and index availability. Restart the Python server after updating to expose the index status in `/health`.
 
 The dashboard and JSON export report distinct page cases, successful/failed cases, scan attempts and retries. Automatic scenario IDs are SHA-256 hashes of the page URL after removing known tracking parameters; job-identifying query parameters and meaningful SPA routes remain. The same URL gets the same ID on success and failure. Explicit research `scenarioId` options override this default. Different listings sharing a URL, changed content at an old URL, or duplicate adverts on different URLs require a saved-scenario manifest; URL identity does not prove independent recruitment cases. Failures before a URL is available remain recorded, but are reported as unidentified and excluded from case rates.
 

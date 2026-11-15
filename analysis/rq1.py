@@ -11,6 +11,42 @@ from collections import defaultdict
 GRADE = {"low": 0, "uncertain": 1, "elevated": 2}
 SENSITIVITIES = ("priorWeight", "rawScaling", "lowerBoundaries", "upperBoundaries")
 
+def reference_checks(rows, contract, mode):
+    """Check every included reference; never estimate reliability from a subset."""
+    missing = []
+    protocol = contract.get("annotationProtocolVersion")
+    if not isinstance(protocol, str) or not protocol.strip() or any(r.get("annotationProtocolVersion") != protocol for r in rows):
+        missing.append("annotation_protocol_version")
+    if mode == "single":
+        annotator = contract.get("annotatorId")
+        invalid = sum(
+            not isinstance(annotator, str) or not annotator.strip()
+            or r.get("annotatorId") != annotator
+            or not isinstance(r.get("reference"), dict)
+            or r["reference"].get("recordedBeforePrediction") is not True
+            for r in rows
+        )
+        if invalid:
+            missing.append("complete_single_annotator_provenance")
+        return {"status": "not_applicable", "reason": "Single-annotator study; inter-rater reliability is not measurable.",
+                "pairs": 0, "raw_agreement": None, "linear_weighted_kappa": None,
+                "unweighted_kappa": None, "confusion_matrix": None,
+                "reference_records": len(rows), "invalid_provenance_records": invalid}, missing
+    annotations = []
+    for row in rows:
+        labels = row.get("annotatorLabels")
+        if isinstance(labels, list) and len(labels) == 2 and all(label in GRADE for label in labels):
+            annotations.append(tuple(GRADE[label] for label in labels))
+    if len(annotations) != len(rows):
+        missing.append("complete_dual_annotations")
+    agreement = {"status": "measured", "pairs": len(annotations), "reference_records": len(rows),
+                 "raw_agreement": sum(a == b for a, b in annotations)/len(annotations) if annotations else None,
+                 "linear_weighted_kappa": kappa(annotations), "unweighted_kappa": kappa(annotations, False),
+                 "confusion_matrix": [[sum(a == i and b == j for a, b in annotations) for j in range(3)] for i in range(3)]}
+    if agreement["linear_weighted_kappa"] is None or agreement["linear_weighted_kappa"] < .40:
+        missing.append("reference_reliability")
+    return agreement, missing
+
 def kappa(pairs, weighted=True):
     if not pairs: return None
     n = len(pairs)
@@ -72,9 +108,17 @@ def support(rows):
 
 def evaluate_rq1(records,contract=None,resamples=10000):
     contract=contract or {}; exclusions=defaultdict(int); eligible=[]; seen={}; problems=[]
+    mode = contract.get("annotationMode", "dual")
+    version = "rq1-single-annotator-v1" if mode == "single" else "rq1-thesis-v1"
+    if mode not in ("single", "dual"):
+        problems.append("unknown_annotation_mode")
+    if mode == "single" and contract.get("analysisVersion") != version:
+        problems.append("single_annotator_analysis_version")
     for row in records:
         if row.get("evaluationOverride") or row.get("synthetic"):
             exclusions["functional_or_synthetic"]+=1; continue
+        if row.get("timingPhase") == "warmup":
+            exclusions["warmup"]+=1; continue
         if row.get("groundTruth") not in GRADE:
             exclusions["reference_insufficient_or_unlabelled"]+=1; continue
         if row.get("page",{}).get("pageStatus") in ("unsupported","extraction-limited") or row.get("page",{}).get("extractionStatus") == "unavailable":
@@ -88,7 +132,8 @@ def evaluate_rq1(records,contract=None,resamples=10000):
         key=row.get("scenarioId") or row.get("id")
         if not key:
             exclusions["missing_scenario_id"]+=1; continue
-        signature=(row["groupId"],row["split"],row["groundTruth"],row["overlapCategory"],tuple(prediction(row,k) for k in ("textOnly","metadataOnly","multiSignal")))
+        signature=(row["groupId"],row["split"],row["groundTruth"],row["overlapCategory"],tuple(prediction(row,k) for k in ("textOnly","metadataOnly","multiSignal")),
+                   row.get("annotationProtocolVersion"), row.get("annotatorId"), row.get("annotatorLabels"), row.get("reference"))
         if key in seen:
             exclusions["technical_repeat"]+=1
             if seen[key]!=signature: problems.append("conflicting_repeat_predictions_or_labels")
@@ -96,7 +141,11 @@ def evaluate_rq1(records,contract=None,resamples=10000):
         seen[key]=signature; eligible.append(row)
     val=[r for r in eligible if r["split"]=="validation"]; test=[r for r in eligible if r["split"]=="test"]
     if {r["groupId"] for r in val} & {r["groupId"] for r in test}: problems.append("cross_split_group_leakage")
-    output={"analysisVersion":"rq1-thesis-v1","target":"project advisory reference, not fraud truth",
+    agreement, reference_missing = reference_checks(eligible, contract, mode)
+    output={"analysisVersion":version,"annotationMode":mode,"target":"project advisory reference, not fraud truth",
+            "reference_agreement":agreement,
+            "claim_scope":"single-researcher exploratory reference agreement; not independent fraud validation" if mode == "single" else "pilot/feasibility effect estimation",
+            "limitations":["Single researcher supplies reference labels; inter-rater reliability is unavailable and developer-reference bias is possible."] if mode == "single" else [],
             "exclusions":dict(exclusions),"validation_support":support(val),"test_support":support(test),"problems":problems}
     if not val or not test or problems:
         output.update({"status":"Inconclusive","reason":"Missing eligible paired partitions or unresolved integrity errors"}); return output
@@ -118,9 +167,7 @@ def evaluate_rq1(records,contract=None,resamples=10000):
     for key in ("textOnly","metadataOnly","multiSignal"):
         scores=[r["baselines"][key]["score"] for r in test]
         distributions[key]={"min":min(scores),"max":max(scores),"mean":statistics.mean(scores),"floor_fraction":sum(v==5 for v in scores)/len(scores),"saturation_fraction":sum(v==100 for v in scores)/len(scores),"scores":scores}
-    annotations=[tuple(GRADE[label] for label in r.get("annotatorLabels",[])) for r in eligible if len(r.get("annotatorLabels",[]))==2 and all(label in GRADE for label in r["annotatorLabels"])]
-    agreement={"pairs":len(annotations),"raw_agreement":sum(a==b for a,b in annotations)/len(annotations) if annotations else None,"linear_weighted_kappa":kappa(annotations),"unweighted_kappa":kappa(annotations,False),"confusion_matrix":[[sum(a==i and b==j for a,b in annotations) for j in range(3)] for i in range(3)]}
-    missing=[]
+    missing=list(reference_missing)
     for category in ("DIRECT", "RELATED", "LOWER-OVERLAP"):
         strata[category]["support"] = support([r for r in test if r["overlapCategory"] == category])
     for gate in ("sealedBeforeHeldOut","precisionJustified","conformancePassed","leakageAuditPassed","overlapTaxonomySealed"):
@@ -135,18 +182,14 @@ def evaluate_rq1(records,contract=None,resamples=10000):
     lower_class_min = contract.get("lowerOverlapClassMinGroups")
     if type(lower_class_min) is not int or lower_class_min < 1 or any(n < lower_class_min for n in support(lower)["class_groups"].values()):
         missing.append("predeclared_lower_overlap_class_support")
-    if agreement["linear_weighted_kappa"] is None or agreement["linear_weighted_kappa"] < .40: missing.append("reference_reliability")
     if any("overall" not in value for value in sensitivity.values()): missing.append("complete_sensitivity_set")
     reversal=primary["delta_maoe"]>0 and (lower_result["delta_maoe"] is None or lower_result["delta_maoe"]<=0 or primary["delta_linear_weighted_kappa"] is None or primary["delta_linear_weighted_kappa"]<0 or any(value.get("overall",{}).get("delta_maoe",-1)<0 or value.get("lower_overlap",{}).get("delta_maoe",-1)<0 for value in sensitivity.values()))
     if reversal: missing.append("metric_or_configuration_direction_reversal")
-    for rows in (val, test):
-        for row in rows:
-            if row.get("annotationProtocolVersion") != contract.get("annotationProtocolVersion") or not contract.get("annotationProtocolVersion"):
-                if "annotation_protocol_version" not in missing: missing.append("annotation_protocol_version")
-                break
     status="Inconclusive" if missing else "Supported" if primary["delta_maoe"]>0 and lower_result["delta_maoe"]>0 else "Not Supported"
+    if mode == "single" and not missing:
+        status = "Exploratory Improvement" if primary["delta_maoe"] > 0 and lower_result["delta_maoe"] > 0 else "No Exploratory Improvement"
     # Partially Supported requires a separately sealed synthesis rule; never invent one from results.
-    output.update({"status":status,"claim_scope":"pilot/feasibility effect estimation" if missing else "predeclared grouped advisory-reference comparison",
+    output.update({"status":status,"claim_scope":output["claim_scope"] if mode == "single" else "pilot/feasibility effect estimation" if missing else "predeclared grouped advisory-reference comparison",
         "missing_gates":missing,"validation_maoe":validation,"selected_single_branch":single,"primary":primary,"lower_overlap":lower_result,
         "overlap_strata":strata,"sensitivities":sensitivity,"branch_distributions":distributions,"reference_agreement":agreement,
         "class_metrics":{key:class_metrics(test,key) for key in ("textOnly","metadataOnly","multiSignal")}})

@@ -6,10 +6,24 @@ h2 { margin: 0 0 12px; font-size: 18px; }.settings { display: flex; align-items:
 input { border: 1px solid #bcc8d8; border-radius: 8px; padding: 10px; }button { border: 1px solid #aebccc; border-radius: 8px; background: #fff; padding: 10px 13px; cursor: pointer; font-weight: 700; }.danger { color: #ae2929; }
 .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 18px; }.card { background: white; border-radius: 12px; padding: 16px; border-top: 4px solid #32b888; }.card span { display:block; color:#64748b;font-size:12px}.card strong{font-size:27px}.card small{display:block;margin-top:5px;color:#64748b}
 .section-head { display:flex;justify-content:space-between;gap:16px;align-items:center}.section-head p{margin:0;color:#64748b;font-size:13px}.table-wrap{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e2e8f0}th{color:#526177;background:#f7f9fc}.muted{color:#8a96a8}ol{line-height:1.8}@media(max-width:800px){.cards{grid-template-columns:1fr 1fr}.settings,.section-head{align-items:stretch;flex-direction:column}}
-.selected-score { background: #dff6ed; color: #116248; font-weight: 800; }
-.mode-badge { display: inline-block; padding: 4px 7px; border-radius: 999px; background: #edf2f8; font-weight: 700; white-space: nowrap; }
 #caseForm { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; align-items: end; }
 #caseForm label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
 #caseForm input, #caseForm select { min-width: 0; width: 100%; box-sizing: border-box; }
 #caseForm select { border: 1px solid #bcc8d8; border-radius: 8px; padding: 10px; background: white; }
 #testCases { overflow: auto; }
+.case-id { min-width: 100px; max-width: 180px; overflow-wrap: anywhere; }
+.selected-score { background: #dff6ed; color: #116248; font-weight: 800; }
+.metrics-note { color: #526177; font-size: 12px; line-height: 1.6; margin: -6px 0 18px; }
+input[readonly] { background: #edf2f8; color: #526177; }
+#healthStatus { font-size: 12px; line-height: 1.6; }
+#researchFields { border: 0; margin: 0; padding: 0; }
+.research-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 12px; align-items: end; }
+#researchForm label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+#researchForm input:not([type=checkbox]), #researchForm select, #researchForm textarea { width: 100%; min-width: 0; border: 1px solid #bcc8d8; border-radius: 8px; padding: 10px; background: white; font: inherit; }
+.research-checks { display: grid; gap: 10px; margin: 16px 0; }
+#researchForm .research-checks label, #caseForm .reference-refresh { display: flex; align-items: center; gap: 8px; }
+#researchForm input[type=checkbox] { width: auto; margin: 0; padding: 0; flex: none; }
+#caseForm .reference-refresh input { width: auto; }
+.research-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.form-help { font-size: 12px; color: #526177; line-height: 1.5; }
+#researchStatus, #researchReadiness { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }

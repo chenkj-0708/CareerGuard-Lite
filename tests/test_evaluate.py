@@ -1,6 +1,7 @@
 import unittest
 
 from analysis.evaluate import evaluate
+from tests import test_rq1
 
 
 def record(truth, text, metadata, multi, full=None, condition="score-only", decision=None):
@@ -21,6 +22,13 @@ def record(truth, text, metadata, multi, full=None, condition="score-only", deci
 
 
 class EvaluateTests(unittest.TestCase):
+    def test_export_contract_selects_single_mode(self):
+        rows, contract = test_rq1.RQ1Tests().single_study()
+        result = evaluate({"records":rows, "analysisContract":contract}, 10)
+        self.assertEqual(result["rq1"]["analysisVersion"], "rq1-single-annotator-v1")
+        self.assertEqual(result["rq1"]["status"], "Exploratory Improvement")
+        self.assertEqual(result["rq1"]["reference_agreement"]["status"], "not_applicable")
+
     def test_metrics_and_study(self):
         payload = {"records": [
             record("elevated", 70, 20, 80, 85, "explanation", "elevated"),

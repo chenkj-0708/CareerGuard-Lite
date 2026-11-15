@@ -7,8 +7,8 @@ import { scoreAll } from "../lib/scoring.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureDir = path.resolve(here, "../fixtures/synthetic");
 const manifest = JSON.parse(fs.readFileSync(path.join(fixtureDir, "scenario_manifest.json"), "utf8"));
-assert.equal(manifest.filter((item) => item.label === "uncertain").length, 20);
-assert.equal(manifest.filter((item) => item.label === "elevated").length, 20);
+assert.equal(manifest.filter((item) => item.label === "uncertain").length, 30);
+assert.equal(manifest.filter((item) => item.label === "elevated").length, 30);
 
 function extractedPage(item) {
   const source = fs.readFileSync(path.join(fixtureDir, `${item.id}.html`), "utf8");
@@ -39,7 +39,7 @@ function extractedPage(item) {
 
 for (const item of manifest) {
   const source = fs.readFileSync(path.join(fixtureDir, `${item.id}.html`), "utf8");
-  const expectedNext = item.id.endsWith("-20")
+  const expectedNext = item.id.endsWith("-30")
     ? `${item.label}-01.html`
     : `${item.label}-${String(Number(item.id.slice(-2)) + 1).padStart(2, "0")}.html`;
   assert.match(source, new RegExp(`class="next-button" href="${expectedNext}"`), `${item.id} has an invalid next link`);

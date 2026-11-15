@@ -91,7 +91,16 @@ class SecurityTests(unittest.TestCase):
             for body,expected in ((b"x"*4097,413),(b"{",400),(b"{}",400)):
                 with self.assertRaises(urllib.error.HTTPError) as error:request(body,origin)
                 self.assertEqual(error.exception.code,expected)
-            with request(origin=origin) as response:token=json.load(response)["token"]
+            with request(origin=origin) as response:
+                health=json.load(response)
+                self.assertTrue(health["ok"])
+                self.assertFalse(health["indexAvailable"])
+                token=health["token"]
+            with tempfile.TemporaryDirectory() as directory:
+                server.engine=VerificationEngine(index_fixture(directory))
+                with request(origin=origin) as response:
+                    self.assertTrue(json.load(response)["indexAvailable"])
+                server.engine=VerificationEngine()
             data=payload(token)
             with request(json.dumps(data).encode(),origin) as response:
                 self.assertEqual(json.load(response)["status"],"unavailable")
