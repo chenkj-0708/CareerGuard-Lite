@@ -18,6 +18,16 @@ try {
   });
   await page.goto("https://extension.test/dashboard.html");
   await page.waitForFunction(()=>document.getElementById("scanSummary").textContent.includes("50.0%"));
+  assert.equal(await page.locator("#protocol").getAttribute("open"), null);
+  assert.equal(await page.locator("#cases").getAttribute("open"), null);
+  await page.locator('nav a[href="#cases"]').click();
+  assert.equal(await page.locator("#cases").getAttribute("open"), "");
+  await page.locator("#cases > summary").click();
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({width, height:1000});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No page overflow at ${width}px`);
+  }
+  await page.locator("#scanSummary summary").click();
   const text=await page.locator("#scanSummary").innerText();
   assert.ok(text.includes("1 successful")&&text.includes("1 failed"));
   assert.ok(text.includes("100.0 ms")&&text.includes("800.0 ms"));
@@ -25,6 +35,7 @@ try {
   assert.equal(await page.locator("#saveSettings").count(), 0);
   assert.ok((await page.locator("#summary").innerText()).includes("Human-reference agreement (descriptive)"));
   assert.ok((await page.locator("#records .selected-score").innerText()).includes("5 · Low ✓"));
+  await page.locator("#connection > summary").click();
   let healthMode = "no-index";
   await page.route("http://127.0.0.1:8765/health", async route => {
     if (healthMode === "timeout") return;
@@ -40,6 +51,8 @@ try {
   await page.click("#clear");
   await page.waitForFunction(()=>document.getElementById("scanSummary").textContent.includes("0 distinct page cases"));
   assert.deepEqual(await page.evaluate(()=>stored.extractionFailures),[]);
+  await page.locator("#protocol > summary").click();
+  await page.locator("#cases > summary").click();
   await page.fill("#researchAnnotator","researcher-1");await page.fill("#researchRubric","single-rubric-v1");await page.click("#saveResearch");
   await page.waitForFunction(()=>stored.analysisContract?.annotatorId === "researcher-1");
   await page.fill("#testId","CG-001");await page.fill("#testUrl","https://example.com/job?jk=1");

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {defaultResearchContract,sealResearchContract,buildResearchExport} from '../lib/research-protocol.js';
+import {joinTestReferences} from '../lib/test-cases.js';
+const protocol={...defaultResearchContract(),analysisVersion:'rq1-simple-v2',annotatorId:'r1',annotationProtocolVersion:'simple-v2',unresolvedCrossSplitPairs:0,precisionJustified:true,conformancePassed:true,leakageAuditPassed:true,overlapTaxonomySealed:true,evidenceNotes:'Functional test only'};
+const sealed=await sealResearchContract(protocol,null,'2026-11-01T00:00:00Z');
+const item={scenarioId:'p1',url:'https://example.com/job',groundTruth:'low',groupId:'g1',split:'test',annotatorId:'r1',annotationProtocolVersion:'simple-v2',labelledAt:'2026-11-02T00:00:00Z',rationale:'Clear role and application process.',rationaleRecordedAt:'2026-11-02T00:00:00Z',extractionReview:'correct',provenanceReference:'capture-1'};
+const row={scenarioId:'p1',split:'test',startedAt:'2026-11-03T00:00:00Z'};
+const exported=await buildResearchExport({analysisContract:sealed,testCases:[item],scanLogs:[row]});
+assert.equal(exported.records[0].rationaleBeforePrediction,true);
+assert.equal(exported.researchReadiness.caseIssues.p1,undefined);
+assert.equal(joinTestReferences([row],[{...item,rationaleRecordedAt:'2026-11-04T00:00:00Z'}])[0].rationaleBeforePrediction,false);
+console.log('Simple protocol without per-case overlap, reason provenance and late edits passed');

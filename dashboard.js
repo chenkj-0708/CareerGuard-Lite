@@ -48,15 +48,16 @@ function render() {
   el.researchReadiness.textContent=readiness?`RQ1 export: ${readiness.status}. ${readiness.protocolIssues.join(" ")} ${Object.keys(readiness.caseIssues).length} cases have missing or incompatible reference metadata. ${Object.entries(readiness.caseIssues).slice(0,5).map(([id,fields])=>`${id}: ${fields.join(", ")}`).join("; ")}`:"No research export prepared.";
   const stats = scanStatistics(logs, extractionFailures);
   const duration = value => value === null ? "—" : `${value.toFixed(1)} ms`;
-  el.scanSummary.innerHTML = `<p>${stats.independent_scenarios} distinct page cases · ${stats.successful_scenarios} successful · ${stats.failed_scenarios} failed · Success rate: ${stats.scenario_success_rate === null ? "—" : (stats.scenario_success_rate*100).toFixed(1)+"%"}</p>
-    <p>${stats.scan_attempts} measured scans: ${stats.successful_attempts} succeeded, ${stats.failed_attempts} failed; ${stats.repeated_attempts} repeat scans.</p>
-    <p>Successful scans: typical ${duration(stats.timing.success.median_ms)}, slower cases (p95) ${duration(stats.timing.success.p95_ms)}.<br>Failed scans: typical ${duration(stats.timing.failure.median_ms)}, slower cases (p95) ${duration(stats.timing.failure.p95_ms)}.</p>
-    <p>Each case's first measured scan determines success; retries do not replace failures. Timing uses one median per case. Forced tests and marked warm-ups are excluded. ${stats.excluded.unidentified} records have no case ID and are excluded. Figures cover retained history; different URLs may still contain duplicate adverts.</p>`;
+  el.scanSummary.innerHTML = `<div class="performance-grid">
+    <article><span>Scan success</span><strong>${stats.scenario_success_rate === null ? "—" : (stats.scenario_success_rate*100).toFixed(1)+"%"}</strong><small>${stats.successful_scenarios} successful · ${stats.failed_scenarios} failed</small></article>
+    <article><span>Typical successful scan</span><strong>${duration(stats.timing.success.median_ms)}</strong><small>p95 ${duration(stats.timing.success.p95_ms)}</small></article>
+    <article><span>Page cases</span><strong>${stats.independent_scenarios}</strong><small>${stats.scan_attempts} measured scans · ${stats.repeated_attempts} repeats</small></article>
+    </div><details class="help"><summary>Timing & counting details</summary><p>${stats.independent_scenarios} distinct page cases. Failed scans: typical ${duration(stats.timing.failure.median_ms)}, p95 ${duration(stats.timing.failure.p95_ms)}. ${stats.successful_attempts} successful attempts; ${stats.failed_attempts} failed attempts.</p><p>Each case's first measured scan determines success; retries do not replace failures. Timing uses one median per case. Forced tests and marked warm-ups are excluded. ${stats.excluded.unidentified} records have no case ID and are excluded. Figures cover retained history; different URLs may still contain duplicate adverts.</p></details>`;
   const definitions = [["textOnly","Text-only"],["metadataOnly","Metadata-only"],["multiSignal","Multi-signal"]];
   const metrics = dashboardMetrics(logs, extractionFailures);
   el.summary.innerHTML = definitions.map(([key,label]) => {
     const metric = metrics.models[key];
-    return `<article class="card"><span>${label} · Human-reference agreement (descriptive)</span><strong>${metric.agreement === null ? "—" : `${(metric.agreement*100).toFixed(1)}%`}</strong><small>${metric.count} included cases · ${metrics.excluded_cases} excluded cases</small></article>`;
+    return `<article class="card"><span>${label}</span><span class="metric-definition">Human-reference agreement (descriptive)</span><strong>${metric.agreement === null ? "—" : `${(metric.agreement*100).toFixed(1)}%`}</strong><small>${metric.count} included cases · ${metrics.excluded_cases} excluded cases</small></article>`;
   }).join("");
   const reasons = Object.entries(metrics.excluded).map(([key,count]) => `${METRIC_EXCLUSIONS[key]}: ${count}`).join("; ");
   el.metricsNote.textContent = `All three methods use the same eligible cases and each case's first retained measured attempt. ${metrics.skipped.repeats} repeat records are not counted again. Skipped records: ${metrics.skipped.forced} forced/synthetic, ${metrics.skipped.warmup} warm-ups, ${metrics.skipped.unidentified} without a case ID, and ${metrics.skipped.invalid_time} without a valid timestamp. ${reasons ? "Exclusions: "+reasons+". " : ""}This is not a formal RQ1 verdict or a measure of real-world fraud detection accuracy.`;
@@ -173,3 +174,22 @@ async function safeLoad(){
 }
 safeLoad().then(renderResearchForm);
 chrome.storage.onChanged?.addListener((_changes,area)=>{if(area === "local")safeLoad();});
+
+// Deep links open the relevant workspace without exposing every form at once.
+function revealSection() {
+  const id = location.hash.slice(1);
+  const section = document.getElementById(id);
+  if (section?.matches("details.disclosure")) section.open = true;
+  document.querySelectorAll("nav a").forEach(link => {
+    const active = link.hash === (location.hash || "#overview");
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "location");
+    else link.removeAttribute("aria-current");
+  });
+}
+window.addEventListener("hashchange", revealSection);
+document.querySelectorAll('a[href^="#"]').forEach(link => link.addEventListener("click", () => {
+  const section = document.getElementById(link.hash.slice(1));
+  if (section?.matches("details.disclosure")) section.open = true;
+}));
+revealSection();

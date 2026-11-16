@@ -24,12 +24,13 @@ try {
   await page.evaluate(() => {const pending=structuredClone(record);delete pending.scenarioId;receive({type:"CG_LOCAL_RESULT",record:pending});});
   assert.equal(await page.locator("#status").innerText(), "Local result ready; backend lookup in progress.");
   let text = await page.locator("#result").innerText();
-  assert.ok(text.includes("Content reading completeness: 85% (not prediction accuracy)"));
+  assert.ok(!text.includes("Content reading completeness"));
   for (const label of ["Scoring signal", "Context (no points)", "Information limitation (no points)", "Duplicate listing context", "Lookup in progress"]) assert.ok(text.includes(label));
   assert.equal(await page.locator("details.technical-details").getAttribute("open"), null);
   assert.ok(!text.includes("Distance from risk-tier boundary"));
   await page.click(".technical-details summary");
   assert.ok((await page.locator("#result").innerText()).includes("Distance from risk-tier boundary: 30%"));
+  assert.ok((await page.locator("#result").innerText()).includes("Content reading completeness: 85% (not prediction accuracy)"));
   await page.evaluate(() => {record.escalation.status="completed";record.displayedResult.backend={contextReasons:[]};finishScan({ok:true,record});});
   await page.waitForFunction(() => !document.getElementById("scan").disabled);
   assert.ok((await page.locator(".backend-status").innerText()).includes("Lookup completed"));

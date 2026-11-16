@@ -20,6 +20,8 @@ try {
   });
   await page.goto("https://extension.test/dashboard.html");
   await page.waitForFunction(()=>document.getElementById("researchStatus").textContent.includes("Unsealed"));
+  await page.locator("#protocol > summary").click();
+  await page.locator("#cases > summary").click();
   await page.fill("#researchAnnotator","researcher-1");await page.fill("#researchRubric","single-rubric-v1");
   await page.fill("#researchMinGroups","5");await page.fill("#researchMinClass","5");await page.fill("#researchPairs","0");
   for(const id of ["researchPrecision","researchConformance","researchLeakage","researchTaxonomy"])await page.check(`#${id}`);
@@ -27,7 +29,7 @@ try {
   await page.click("#sealResearch");
   await page.waitForFunction(()=>document.getElementById("researchStatus").textContent.startsWith("Sealed at"));
   assert.equal(await page.locator("#researchAnnotator").isDisabled(),true);
-  if(process.env.CG_RESEARCH_SCREENSHOT)await page.locator("section").filter({has:page.locator("#researchForm")}).screenshot({path:process.env.CG_RESEARCH_SCREENSHOT});
+  if(process.env.CG_RESEARCH_SCREENSHOT)await page.locator("#protocol").screenshot({path:process.env.CG_RESEARCH_SCREENSHOT});
   for(const split of ["validation","test"])for(let i=0;i<15;i++){
     const id=`${split}-${i}`;
     await page.fill("#testId",id);await page.fill("#testUrl",`https://example.com/${id}`);

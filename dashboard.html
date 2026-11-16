@@ -6,19 +6,16 @@
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <header><div><p class="eyebrow">CAREERGUARD LITE</p><h1>Evaluation dashboard</h1><p>Compare browser-time baselines and export privacy-bounded research evidence.</p></div></header>
+  <header><a class="brand" href="#overview"><span class="brand-mark">CG</span> CareerGuard <span>Lite</span></a><span class="header-note">RESEARCH WORKSPACE</span></header>
+  <nav aria-label="Dashboard sections"><a href="#overview">Overview</a><a href="#cases">Test pages</a><a href="#protocol">Research protocol</a><a href="#connection">Connection</a></nav>
+  <div class="page-title" id="overview"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>A clearer view.</h1><p>Review scans. Compare signals. Keep your evidence.</p></div><a class="quiet-link" href="#history">View scan history ↗</a></div>
   <main>
-    <section class="settings panel">
-      <h2>Runtime settings</h2>
-      <label>Backend URL (fixed local address)<input id="backendUrl" type="url" value="http://127.0.0.1:8765" readonly></label>
-      <button id="health">Test backend</button><span id="healthStatus" role="status">Service: not checked · Index: not checked</span>
-    </section>
     <section class="cards" id="summary"></section>
-    <p id="metricsNote" class="metrics-note"></p>
-    <section class="panel"><h2>Scan success and speed</h2><div id="scanSummary"></div></section>
-    <section class="panel">
-      <h2>RQ1 research protocol</h2>
-      <p>Save your annotator and rubric IDs before recording reference answers. Document the actual checks below. A draft can be analysed, but missing gates remain Inconclusive. Sealing does not validate the evidence you declare.</p>
+    <details class="metric-details"><summary>How these comparisons work</summary><p id="metricsNote" class="metrics-note"></p></details>
+    <section class="panel"><div class="section-head"><h2>Scan performance</h2><span class="subtle">RETAINED HISTORY</span></div><div id="scanSummary"></div></section>
+    <details class="panel disclosure" id="protocol">
+      <summary><span class="section-number">01</span><span>Research protocol<small>Set up your evaluation</small></span></summary><div class="disclosure-body">
+      <p class="section-intro">Save your IDs before labelling. Seal the protocol before held-out access.</p><details class="help"><summary>Protocol guidance</summary><p>Drafts can be analysed; missing gates remain Inconclusive. Sealing records your declarations, not their validity.</p></details>
       <form id="researchForm">
         <fieldset id="researchFields">
           <div class="research-grid">
@@ -40,11 +37,11 @@
         <div class="research-actions"><button type="submit" id="saveResearch">Save draft</button><button type="button" id="sealResearch">Seal protocol before held-out access</button><button type="button" id="reviseResearch">Revise as unsealed draft</button></div>
       </form>
       <p id="researchStatus" role="status"></p><p id="researchReadiness"></p>
-      <p>Export JSON includes this analysis contract, joined reference metadata and all sensitivity predictions. Run: <code>python analysis/evaluate.py path/to/careerguard-evaluation.json --output path/to/report.json</code>. CSV is a summary, not the full RQ1 input.</p>
-    </section>
-    <section class="panel">
-      <h2>Test pages and human answers</h2>
-      <p>Register a page before scanning. Give it a fixed ID and enter your own answer without viewing system scores. The answer is stored separately and paired with predictions when you export. A single person's answer is a research reference, not confirmed fraud truth.</p>
+      <details class="help"><summary>Analyse an export</summary><p>Export JSON includes this analysis contract, joined reference metadata and all sensitivity predictions. Run: <code>python analysis/evaluate.py path/to/careerguard-evaluation.json --output path/to/report.json</code>. CSV is a summary, not the full RQ1 input.</p></details>
+    </div></details>
+    <details class="panel disclosure" id="cases">
+      <summary><span class="section-number">02</span><span>Test pages<small>Register pages & reference answers</small></span></summary><div class="disclosure-body">
+      <p class="section-intro">Register first. Record your answer before viewing system scores.</p><p class="form-help">Your answer is a research reference, not confirmed fraud.</p>
       <form id="caseForm">
         <label>Case ID<input id="testId" placeholder="CG-001" required pattern="[A-Za-z0-9_-]{1,80}"></label>
         <label>Page URL<input id="testUrl" type="url" placeholder="https://…" required></label>
@@ -56,13 +53,19 @@
         <label class="reference-refresh"><input id="testRefreshReference" type="checkbox"> Record a new reference now using the saved annotator/rubric IDs (updates the label time)</label>
         <button type="submit">Save test page</button><button type="button" id="newCase">New / cancel edit</button>
       </form>
-      <p id="caseStatus" role="status"></p><p>Unchanged old answers keep their original metadata; missing annotator/rubric IDs are not filled retrospectively. Recording a new answer after a prediction is flagged as late. Deleting a case also deletes its reference answer and local scan records. Export anything you need to keep first. Clear scan history keeps registered cases, reference answers and protocol history.</p><div id="testCases"></div>
-    </section>
-    <section class="panel">
-      <div class="section-head"><div><h2>Captured evaluation records</h2><p>Each scan computes every local baseline from the same page. The Multi ✓ marks the primary method, not a correct prediction.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear scan history</button></div></div>
+      <p id="caseStatus" role="status"></p><details class="help"><summary>Reference timing & deletion</summary><p>Unchanged old answers keep their original metadata; missing annotator/rubric IDs are not filled retrospectively. Recording a new answer after a prediction is flagged as late. Deleting a case also deletes its reference answer and local scan records. Export anything you need to keep first. Clear scan history keeps registered cases, reference answers and protocol history.</p></details><div id="testCases"></div>
+    </div></details>
+    <section class="panel" id="history">
+      <div class="section-head"><div><h2>Scan history</h2><p>Multi ✓ is the primary method, not a correctness mark.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear history</button></div></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Case ID</th><th>Page</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Backend status</th><th>Signals</th><th>Truth</th><th>Latency</th></tr></thead><tbody id="records"></tbody></table></div>
     </section>
+    <details class="panel disclosure" id="connection"><summary><span class="section-number">03</span><span>Connection<small>Optional local backend</small></span></summary><div class="disclosure-body settings">
+
+      <label>Backend URL (fixed local address)<input id="backendUrl" type="url" value="http://127.0.0.1:8765" readonly></label>
+      <button id="health">Test backend</button><span id="healthStatus" role="status">Service: not checked · Index: not checked</span>
+    </div></details>
   </main>
+  <footer>CareerGuard Lite <span>Local evidence · Advisory results</span></footer>
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>

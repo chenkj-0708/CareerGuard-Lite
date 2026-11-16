@@ -7,15 +7,15 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header><span class="mark">CG</span><div><h1>CareerGuard Lite</h1><p>Recruitment-risk triage</p></div></header>
+  <header><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z" stroke="currentColor" stroke-width="1.7"/><path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="1.7"/></svg></span><div><h1>CareerGuard <span>Lite</span></h1><p>Your job-search companion</p></div><span class="local-badge">LOCAL</span></header>
   <main>
-    <p class="scan-description">Checks visible job text and page information. Uncertain or elevated results receive selective backend verification.</p>
-    <button id="scan" class="primary">Scan this listing</button>
-    <details><summary>Research test page</summary><label>Case ID (optional)<input id="caseId" placeholder="CG-001" maxlength="80"></label><p>Leave blank to match a registered test page automatically.</p></details>
+    <div class="intro"><span class="eyebrow">BEFORE YOU APPLY</span><h2>A quick check.<br>A clearer next step.</h2><p class="scan-description">Spot warning signs in this job listing.</p></div>
+    <button id="scan" class="primary">Scan this listing <span aria-hidden="true">↗</span></button>
+    <details class="research-option"><summary>Research test page <span>Optional</span></summary><label>Case ID (optional)<input id="caseId" placeholder="CG-001" maxlength="80"></label><p>Leave blank to match a registered test page automatically.</p></details>
     <p id="status" role="status"></p>
     <section id="result" hidden></section>
   </main>
-  <footer><button id="dashboard" class="link">Evaluation dashboard</button><span>Advisory only</span></footer>
+  <footer><button id="dashboard" class="link">Open dashboard ↗</button><span>Advisory only · Not a verdict</span></footer>
   <script type="module" src="popup.js"></script>
 </body>
 </html>
