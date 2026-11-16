@@ -78,7 +78,7 @@ function render() {
       ${scoreCell(record.baselines?.textOnly)}
       ${scoreCell(record.baselines?.metadataOnly)}
       ${scoreCell(record.baselines?.multiSignal, true)}
-      <td>${backendStatus(record)}</td><td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${record.totalLatencyMs} ms</td><td><button type="button" class="danger" data-delete-scan="${escapeHtml(record.id)}" ${record.id?"":"disabled"}>Delete</button></td></tr>`;
+      <td>${backendStatus(record)}</td><td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${Number.isFinite(record.totalLatencyMs) ? record.totalLatencyMs+" ms" : "—"}</td><td><button type="button" class="danger" data-delete-scan="${escapeHtml(record.id)}" ${record.id?"":"disabled"}>Delete</button></td></tr>`;
   }).join("") || `<tr><td colspan="11" class="muted">No scans recorded yet.</td></tr>`;
   enhanceTable(el.testCases.querySelector("table"), "cases", 0);
   enhanceTable(el.records.closest("table"), "history", 1);
@@ -86,6 +86,11 @@ function render() {
 
 function enhanceTable(table, key, caseColumn) {
   if (!table) { document.getElementById(`${key}TableControls`)?.remove(); return; }
+  let tableWrap=table.closest(".table-wrap");
+  if(!tableWrap){
+    tableWrap=document.createElement("div");tableWrap.className="table-wrap";
+    table.before(tableWrap);tableWrap.append(table);
+  }
   const state = tableStates.get(key) || { size:10, page:0, column:caseColumn, direction:"default" };
   tableStates.set(key,state);
   const body=table.tBodies[0], headers=[...table.tHead.rows[0].cells];
@@ -94,7 +99,7 @@ function enhanceTable(table, key, caseColumn) {
   let controls=document.getElementById(`${key}TableControls`);
   if (!controls) {
     controls=document.createElement("div");controls.id=`${key}TableControls`;controls.className="table-controls";
-    (table.closest(".table-wrap") || table).before(controls);
+    tableWrap.before(controls);
   }
   controls.innerHTML=`<label>Rows per page <select aria-label="${key} rows per page"><option>5</option><option>10</option><option>100</option><option>1000</option><option value="custom">Custom</option></select></label><label class="custom-row-count">Custom rows <input type="number" min="1" max="100000" step="1" aria-label="${key} custom rows" value="${state.size}"></label><span class="page-status" role="status"></span><button type="button" data-page="previous" aria-label="${key} previous page">←</button><button type="button" data-page="next" aria-label="${key} next page">→</button>`;
   const select=controls.querySelector("select"), customLabel=controls.querySelector(".custom-row-count"), input=controls.querySelector("input");

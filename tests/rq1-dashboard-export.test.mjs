@@ -1,6 +1,7 @@
 // Functional end-to-end fixture only. None of these declarations are research evidence.
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 import {createRequire} from "node:module";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
@@ -56,6 +57,20 @@ try {
   assert.ok(exported.records.every(r=>r.reference.rationale===`Observed evidence for ${r.scenarioId}.`&&r.reference.rationaleRecordedBeforePrediction));
   assert.ok(exported.records.every(r=>r.annotatorId==="researcher-1"&&r.annotationProtocolVersion==="single-rubric-v1"&&r.overlapCategory==="LOWER-OVERLAP"&&r.reference.recordedBeforePrediction));
   assert.equal(await page.evaluate(()=>stored.scanLogs.some(r=>r.groundTruth!==null)),false);
+  if(process.env.CG_DASHBOARD_PREVIEW_DIR) {
+    const dir=process.env.CG_DASHBOARD_PREVIEW_DIR;fs.mkdirSync(dir,{recursive:true});
+    await page.setViewportSize({width:1440,height:1000});
+    await page.evaluate(()=>{document.documentElement.style.scrollBehavior="auto";document.getElementById("protocol").open=false;window.scrollTo(0,0);});
+    await page.screenshot({path:path.join(dir,"dashboard-desktop.png")});
+    await page.locator("#cases").scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(dir,"dashboard-cases.png")});
+    await page.setViewportSize({width:390,height:844});
+    await page.evaluate(()=>window.scrollTo(0,0));
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"Mobile page must not overflow horizontally");
+    await page.screenshot({path:path.join(dir,"dashboard-mobile.png")});
+    await page.setViewportSize({width:1440,height:1000});
+    await page.evaluate(()=>{document.getElementById("protocol").open=true;});
+  }
   for (const key of ["cases","history"]) {
     const table=key==="cases"?page.locator("#testCases table"):page.locator("#records").locator("..");
     const body=table.locator("tbody"), caseColumn=key==="cases"?0:1;
@@ -71,6 +86,15 @@ try {
     for(const size of ["100","1000"]) {
       await page.selectOption(`#${key}TableControls select`,size);
       assert.equal(await body.locator("tr").count(),30);
+    }
+    if(key==="cases") {
+      const scrolling=await page.evaluate(()=>{
+        const controls=document.getElementById("casesTableControls"),wrap=document.querySelector("#testCases .table-wrap");
+        const before=controls.getBoundingClientRect().top;
+        wrap.scrollTop=100;wrap.scrollLeft=100;
+        return {outside:!wrap.contains(controls),scrolled:wrap.scrollTop>0,unchanged:controls.getBoundingClientRect().top===before};
+      });
+      assert.deepEqual(scrolling,{outside:true,scrolled:true,unchanged:true});
     }
     await page.selectOption(`#${key}TableControls select`,"custom");
     await page.fill(`#${key}TableControls input`,"7");await page.locator(`#${key}TableControls input`).press("Tab");

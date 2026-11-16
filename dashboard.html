@@ -7,10 +7,11 @@
 </head>
 <body>
   <header><a class="brand" href="#overview"><span class="brand-mark">CG</span> CareerGuard <span>Lite</span></a><span class="header-note">RESEARCH WORKSPACE</span></header>
-  <nav aria-label="Dashboard sections"><a href="#overview">Overview</a><a href="#cases">Test pages</a><a href="#protocol">Research protocol</a><a href="#connection">Connection</a></nav>
-  <div class="page-title" id="overview"><h1>Dashboard</h1><a class="quiet-link" href="#history">View scan history ↗</a></div>
+  <nav aria-label="Dashboard sections"><a href="#overview">Overview</a><a href="#protocol">Research protocol</a><a href="#cases">Test pages</a><a href="#history">Scan history</a><a href="#connection">Connection</a></nav>
+  <div class="page-title" id="overview"><div><span class="eyebrow">EVALUATION WORKSPACE</span><h1>Research dashboard</h1><p>Register pages, record your judgement, and review scan results.</p></div><a class="quiet-link" href="#history">View scan history ↗</a></div>
   <main>
-    <section class="cards" id="summary"></section>
+    <section class="cards" id="summary" aria-label="Reference agreement and backend status"></section>
+    <p class="overview-note">Agreement compares scans with your reference answers. Formal RQ1 analysis uses validation and test groups.</p>
     <details class="metric-details"><summary>How these comparisons work</summary><p id="metricsNote" class="metrics-note"></p></details>
     <section class="panel"><div class="section-head"><h2>Scan performance</h2><span class="subtle">RETAINED HISTORY</span></div><div id="scanSummary"></div></section>
     <details class="panel disclosure" id="protocol">
@@ -44,16 +45,16 @@
       <p class="section-intro">Register first. Record your answer before viewing system scores.</p><p class="form-help">Your answer is a research reference, not confirmed fraud.</p>
       <form id="caseForm">
         <label>Case ID<input id="testId" placeholder="CG-001" required pattern="[A-Za-z0-9_\-]{1,80}"></label>
-        <label>Page URL<input id="testUrl" type="url" placeholder="https://…" required></label>
+        <label class="field-url">Page URL<input id="testUrl" type="url" placeholder="https://…" required></label>
         <label>Your answer<select id="testLabel"><option value="">Not labelled yet</option><option value="low">Low</option><option value="uncertain">Uncertain</option><option value="elevated">Elevated</option><option value="reference-insufficient">Insufficient information</option></select></label>
-        <label>Reason for your answer<textarea id="testRationale" maxlength="2000" rows="3" placeholder="Explain your judgement in one or two sentences using evidence you observed on the page."></textarea></label>
+        <label class="field-rationale">Reason for your answer<textarea id="testRationale" maxlength="2000" rows="3" placeholder="Explain your judgement in one or two sentences using evidence you observed on the page."></textarea></label>
         <p class="form-help">Write your reason before scanning. Later additions or edits have their own timestamp; they do not change the original label time. Do not include personal data.</p>
         <label>Group ID (optional)<input id="testGroup" placeholder="GROUP-001"></label>
         <label>Split<select id="testSplit"><option value="">Not assigned</option><option value="development">Development</option><option value="validation">Validation</option><option value="test">Test</option></select></label>
         <label>Reference overlap category<select id="testOverlap"><option value="">Not assigned</option><option value="DIRECT">Direct</option><option value="RELATED">Related</option><option value="LOWER-OVERLAP">Lower-overlap</option></select></label>
         <p class="form-help">Overlap describes how closely your reference criteria match the scoring rules, not duplicate similarity. Fix the category before scanning. Use the versioned rubric.</p>
         <label class="reference-refresh"><input id="testRefreshReference" type="checkbox"> Record a new reference now using the saved annotator/rubric IDs (updates the label time)</label>
-        <button type="submit">Save test page</button><button type="button" id="newCase">New / cancel edit</button>
+        <div class="form-actions"><button type="submit">Save test page</button><button type="button" id="newCase">New / cancel edit</button></div>
       </form>
       <p id="caseStatus" role="status"></p><details class="help"><summary>Reference timing & deletion</summary><p>Unchanged old answers keep their original metadata; missing annotator/rubric IDs are not filled retrospectively. Recording a new answer after a prediction is flagged as late. Deleting a case also deletes its reference answer and local scan records. Export anything you need to keep first. Clear scan history keeps registered cases, reference answers and protocol history.</p></details><div id="testCases"></div>
     </div></details>

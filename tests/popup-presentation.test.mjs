@@ -19,6 +19,10 @@ try {
         reasons:[{role:"scored",message:"Fee cue"},{role:"context",message:"External link"},{role:"uncertainty",message:"Limited text"}]}};
   });
   await page.goto("https://extension.test/popup.html");
+  if(process.env.CG_POPUP_PREVIEW_DIR){
+    fs.mkdirSync(process.env.CG_POPUP_PREVIEW_DIR,{recursive:true});
+    await page.screenshot({path:`${process.env.CG_POPUP_PREVIEW_DIR}/panel-ready.png`});
+  }
   await page.click("#scan");
   // Exercise an old/minimal notification too: pending output must never print an absent ID.
   await page.evaluate(() => {const pending=structuredClone(record);delete pending.scenarioId;receive({type:"CG_LOCAL_RESULT",record:pending});});
@@ -40,6 +44,12 @@ try {
     await page.waitForFunction(() => !document.getElementById("scan").disabled);
     assert.ok((await page.locator(".backend-status").innerText()).includes(expected));
     assert.ok(!(await page.locator("body").innerText()).includes("undefined"));
+  }
+  if(process.env.CG_POPUP_PREVIEW_DIR){
+    await page.screenshot({path:`${process.env.CG_POPUP_PREVIEW_DIR}/panel-result.png`});
+    await page.setViewportSize({width:280,height:700});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.screenshot({path:`${process.env.CG_POPUP_PREVIEW_DIR}/panel-narrow.png`});
   }
   console.log("popup pending/completed/unavailable/not-requested states, reference wording and collapsed technical details passed");
 } finally { await browser.close(); }
