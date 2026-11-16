@@ -18,6 +18,21 @@ try {
   });
   await page.goto("https://extension.test/dashboard.html");
   await page.waitForFunction(()=>document.getElementById("scanSummary").textContent.includes("50.0%"));
+  // HTML patterns use Unicode Sets (v), which requires escaping literal hyphens.
+  const patternsValid = await page.evaluate(() => {
+    for (const input of document.querySelectorAll("input[pattern]")) {
+      const pattern = new RegExp(`^(?:${input.pattern})$`, "v");
+      const valid = input.id === "testId" ? "CG_001-A" : "researcher_1.rubric-v1";
+      if (!pattern.test(valid) || pattern.test("invalid id!") || pattern.test("a".repeat(81))) return false;
+      input.value = valid;
+      if (input.validity.patternMismatch) return false;
+      input.value = "invalid id!";
+      if (!input.validity.patternMismatch) return false;
+      input.value = "";
+    }
+    return true;
+  });
+  assert.ok(patternsValid, "All HTML patterns compile in v mode and enforce ID rules");
   assert.equal(await page.locator("#protocol").getAttribute("open"), null);
   assert.equal(await page.locator("#cases").getAttribute("open"), null);
   await page.locator('nav a[href="#cases"]').click();
