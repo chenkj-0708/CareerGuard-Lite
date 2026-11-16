@@ -125,3 +125,12 @@ nav a.active{background:#d3e5d7;border-radius:7px;padding-left:12px;padding-righ
 .disclosure>summary:hover{background:#edf3ed}
 .performance-grid strong{color:#153d30}
 .section-head h2{color:#172e27}
+.table-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 12px}
+.table-controls label{display:flex;align-items:center;gap:8px;margin:0}
+.table-controls select{width:auto;min-width:80px}
+.table-controls input{width:100px}
+.table-controls .page-status{margin-left:auto;font-size:12px;color:var(--muted)}
+.table-controls [hidden]{display:none}
+th .table-sort{display:block;width:100%;text-align:left;background:transparent;border:0;color:inherit;font:inherit;padding:8px 0;white-space:nowrap;cursor:pointer}
+th .table-sort:hover{color:#176347;background:transparent}
+th .table-sort:focus-visible{outline:2px solid #176347;outline-offset:2px}

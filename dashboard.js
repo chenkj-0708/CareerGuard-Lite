@@ -42,6 +42,7 @@ function backendStatus(record) {
   return labels[record.escalation?.status] || "Unknown";
 }
 
+const tableStates = new Map();
 function render() {
   el.testCases.innerHTML=testCases.length?`<table><thead><tr><th>Case ID</th><th>Page</th><th>Your answer</th><th>Reason</th><th>Group ID</th><th>Split</th><th>Overlap</th><th>Reference protocol</th><th>Actions</th></tr></thead><tbody>${testCases.map(item=>`<tr><td>${escapeHtml(item.scenarioId)}</td><td>${escapeHtml(item.url)}</td><td>${escapeHtml(item.groundTruth||"Not labelled")}</td><td>${escapeHtml(item.rationale||"Not recorded")}</td><td>${escapeHtml(item.groupId||"—")}</td><td>${escapeHtml(item.split||"Not assigned")}</td><td>${escapeHtml(item.overlapCategory||"Not assigned")}</td><td>${escapeHtml(item.annotatorId||"Missing annotator")} / ${escapeHtml(item.annotationProtocolVersion||"Missing rubric")}</td><td><button type="button" data-edit-case="${escapeHtml(item.scenarioId)}">Edit</button> <button type="button" class="danger" data-delete-case="${escapeHtml(item.scenarioId)}">Delete</button></td></tr>`).join("")}</tbody></table>`:"<p>No test pages registered.</p>";
   const readiness=researchExport?.researchReadiness;
@@ -67,18 +68,83 @@ function render() {
     return counts;
   }, {});
   el.summary.innerHTML += `<article class="card"><span>Backend status</span><strong>${backendCounts.Completed || 0} completed</strong><small>${backendCounts.Unavailable || 0} unavailable · ${backendCounts.Pending || 0} pending · ${backendCounts["Not requested"] || 0} not requested · ${backendCounts.Unknown || 0} unknown</small></article>`;
-  el.records.innerHTML = [...logs].reverse().map((record) => {
+  el.records.innerHTML = [...logs].map((record) => {
     const counts = record.page.signalCounts;
     const signalSummary = counts
       ? `${counts.visibleTextCharacters} chars / ${counts.applicationLinks} apply / ${(counts.emailProviders ?? counts.emails ?? 0) + counts.contactCues} contact`
       : "legacy record";
     return `<tr>
-      <td>${new Date(record.createdAt).toLocaleString()}</td><td class="case-id">${escapeHtml(record.scenarioId||"No case ID")}</td><td>${escapeHtml(record.page.title || record.page.domain)}</td>
+      <td data-sort-value="${escapeHtml(record.createdAt)}">${new Date(record.createdAt).toLocaleString()}</td><td class="case-id">${escapeHtml(record.scenarioId||"No case ID")}</td><td>${escapeHtml(record.page.title || record.page.domain)}</td>
       ${scoreCell(record.baselines?.textOnly)}
       ${scoreCell(record.baselines?.metadataOnly)}
       ${scoreCell(record.baselines?.multiSignal, true)}
       <td>${backendStatus(record)}</td><td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${record.totalLatencyMs} ms</td></tr>`;
   }).join("") || `<tr><td colspan="10" class="muted">No scans recorded yet.</td></tr>`;
+  enhanceTable(el.testCases.querySelector("table"), "cases", 0);
+  enhanceTable(el.records.closest("table"), "history", 1);
+}
+
+function enhanceTable(table, key, caseColumn) {
+  if (!table) { document.getElementById(`${key}TableControls`)?.remove(); return; }
+  const state = tableStates.get(key) || { size:10, page:0, column:caseColumn, direction:"default" };
+  tableStates.set(key,state);
+  const body=table.tBodies[0], headers=[...table.tHead.rows[0].cells];
+  const rows=[...body.rows].filter(row=>row.cells.length===headers.length);
+  const labels=headers.map(cell=>cell.dataset.label ||= cell.textContent.trim());
+  let controls=document.getElementById(`${key}TableControls`);
+  if (!controls) {
+    controls=document.createElement("div");controls.id=`${key}TableControls`;controls.className="table-controls";
+    (table.closest(".table-wrap") || table).before(controls);
+  }
+  controls.innerHTML=`<label>Rows per page <select aria-label="${key} rows per page"><option>5</option><option>10</option><option>100</option><option>1000</option><option value="custom">Custom</option></select></label><label class="custom-row-count">Custom rows <input type="number" min="1" max="100000" step="1" aria-label="${key} custom rows" value="${state.size}"></label><span class="page-status" role="status"></span><button type="button" data-page="previous" aria-label="${key} previous page">←</button><button type="button" data-page="next" aria-label="${key} next page">→</button>`;
+  const select=controls.querySelector("select"), customLabel=controls.querySelector(".custom-row-count"), input=controls.querySelector("input");
+  select.value=[5,10,100,1000].includes(state.size)?String(state.size):"custom";
+  customLabel.hidden=select.value!=="custom";
+  const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:"base"});
+  const compare=(a,b,column)=>{
+    if(key==="history") {
+      if(column===0) return Date.parse(a.cells[0].dataset.sortValue)-Date.parse(b.cells[0].dataset.sortValue);
+      if([3,4,5,9].includes(column)) return (parseFloat(a.cells[column].textContent)||0)-(parseFloat(b.cells[column].textContent)||0);
+      if(column===7) return (parseFloat(a.cells[column].textContent)||0)-(parseFloat(b.cells[column].textContent)||0);
+    }
+    return collator.compare(a.cells[column].textContent.trim(),b.cells[column].textContent.trim());
+  };
+  function update() {
+    const pages=Math.max(1,Math.ceil(rows.length/state.size));state.page=Math.min(state.page,pages-1);
+    const column=state.direction==="default"?caseColumn:state.column;
+    const sorted=rows.map((row,index)=>({row,index})).sort((a,b)=>
+      compare(a.row,b.row,column)*(state.direction==="descending"?-1:1)
+      || compare(a.row,b.row,caseColumn) || a.index-b.index).map(item=>item.row);
+    if(rows.length)body.replaceChildren(...sorted.slice(state.page*state.size,(state.page+1)*state.size));
+    headers.forEach((cell,index)=>{
+      cell.setAttribute("aria-sort",index===column?(state.direction==="descending"?"descending":"ascending"):"none");
+      cell.querySelector("button").textContent=`${labels[index]} ${index===column?(state.direction==="descending"?"↓":"↑"):"↕"}`;
+    });
+    controls.querySelector(".page-status").textContent=`${rows.length?state.page*state.size+1:0}–${Math.min((state.page+1)*state.size,rows.length)} of ${rows.length} · Page ${state.page+1} / ${pages}`;
+    controls.querySelector('[data-page="previous"]').disabled=state.page===0;
+    controls.querySelector('[data-page="next"]').disabled=state.page>=pages-1;
+  }
+  headers.forEach((cell,index)=>{
+    cell.replaceChildren();const button=document.createElement("button");button.type="button";button.className="table-sort";
+    button.title="Toggle default (Case ID ascending), ascending, descending";
+    button.addEventListener("click",()=>{
+      state.direction=state.column!==index||state.direction==="default"?"ascending":state.direction==="ascending"?"descending":"default";
+      state.column=index;state.page=0;update();
+    });cell.append(button);
+  });
+  select.addEventListener("change",()=>{
+    customLabel.hidden=select.value!=="custom";
+    if(select.value==="custom"){input.focus();return;}
+    state.size=Number(select.value);input.value=state.size;state.page=0;update();
+  });
+  input.addEventListener("change",()=>{
+    input.required=true;
+    if(!input.checkValidity()) { input.reportValidity();return; }
+    state.size=Number(input.value);state.page=0;update();
+  });
+  controls.querySelector('[data-page="previous"]').addEventListener("click",()=>{state.page=Math.max(0,state.page-1);update();});
+  controls.querySelector('[data-page="next"]').addEventListener("click",()=>{state.page++;update();});
+  update();
 }
 
 function escapeHtml(value) { const node=document.createElement("span");node.textContent=String(value||"");return node.innerHTML; }

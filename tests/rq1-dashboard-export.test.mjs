@@ -56,6 +56,35 @@ try {
   assert.ok(exported.records.every(r=>r.reference.rationale===`Observed evidence for ${r.scenarioId}.`&&r.reference.rationaleRecordedBeforePrediction));
   assert.ok(exported.records.every(r=>r.annotatorId==="researcher-1"&&r.annotationProtocolVersion==="single-rubric-v1"&&r.overlapCategory==="LOWER-OVERLAP"&&r.reference.recordedBeforePrediction));
   assert.equal(await page.evaluate(()=>stored.scanLogs.some(r=>r.groundTruth!==null)),false);
+  for (const key of ["cases","history"]) {
+    const table=key==="cases"?page.locator("#testCases table"):page.locator("#records").locator("..");
+    const body=table.locator("tbody"), caseColumn=key==="cases"?0:1;
+    const firstId=()=>body.locator("tr").first().locator("td").nth(caseColumn).textContent();
+    assert.equal(await body.locator("tr").count(),10);
+    assert.equal(await firstId(),"test-0");
+    await page.selectOption(`#${key}TableControls select`,"5");
+    assert.equal(await body.locator("tr").count(),5);
+    await page.click(`#${key}TableControls [data-page="next"]`);
+    assert.equal(await firstId(),"test-5");
+    await page.click(`#${key}TableControls [data-page="previous"]`);
+    assert.equal(await firstId(),"test-0");
+    for(const size of ["100","1000"]) {
+      await page.selectOption(`#${key}TableControls select`,size);
+      assert.equal(await body.locator("tr").count(),30);
+    }
+    await page.selectOption(`#${key}TableControls select`,"custom");
+    await page.fill(`#${key}TableControls input`,"7");await page.locator(`#${key}TableControls input`).press("Tab");
+    assert.equal(await body.locator("tr").count(),7);
+    const headers=table.locator("thead th");
+    for(let i=0;i<await headers.count();i++) {
+      const header=headers.nth(i);
+      await header.locator("button").click();assert.equal(await header.getAttribute("aria-sort"),"ascending");
+      await header.locator("button").click();assert.equal(await header.getAttribute("aria-sort"),"descending");
+      await header.locator("button").click();
+      assert.equal(await firstId(),"test-0");
+      assert.equal(await headers.nth(caseColumn).getAttribute("aria-sort"),"ascending");
+    }
+  }
   const run=payload=>JSON.parse(execFileSync(process.env.CG_PYTHON||"python",["-c","import sys,json; from analysis.evaluate import evaluate; print(json.dumps(evaluate(json.load(sys.stdin),10)))"],{cwd:fileURLToPath(new URL("..",import.meta.url)),input:JSON.stringify(payload),encoding:"utf8"}));
   const report=run(exported);
   assert.equal(report.rq1.status,"Exploratory Improvement");
