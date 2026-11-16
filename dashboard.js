@@ -78,8 +78,8 @@ function render() {
       ${scoreCell(record.baselines?.textOnly)}
       ${scoreCell(record.baselines?.metadataOnly)}
       ${scoreCell(record.baselines?.multiSignal, true)}
-      <td>${backendStatus(record)}</td><td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${record.totalLatencyMs} ms</td></tr>`;
-  }).join("") || `<tr><td colspan="10" class="muted">No scans recorded yet.</td></tr>`;
+      <td>${backendStatus(record)}</td><td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${record.totalLatencyMs} ms</td><td><button type="button" class="danger" data-delete-scan="${escapeHtml(record.id)}" ${record.id?"":"disabled"}>Delete</button></td></tr>`;
+  }).join("") || `<tr><td colspan="11" class="muted">No scans recorded yet.</td></tr>`;
   enhanceTable(el.testCases.querySelector("table"), "cases", 0);
   enhanceTable(el.records.closest("table"), "history", 1);
 }
@@ -234,6 +234,22 @@ el.exportJson.addEventListener("click",async()=>{
   catch(error){el.caseStatus.textContent=`Cannot export research data: ${error.message}`;}
 });
 el.exportCsv.addEventListener("click",()=>{const header=["id","created_at","url","page_status","selected_mode","text_score","text_tier","metadata_score","metadata_tier","multi_score","multi_tier","full_score","full_tier","ground_truth","interface_condition","participant_decision","actionability","decision_time_ms","local_scoring_latency_ms","total_latency_ms","escalation_status","scenario_id","group_id","split","overlap_category","config_id","extraction_status_code","root_source","text_evidence","metadata_evidence","annotator_id","annotation_protocol_version","reference_labelled_at","reference_before_prediction","reference_rationale","rationale_recorded_at","rationale_before_prediction"];const rows=logs.map(r=>[r.id,r.createdAt,r.page.url,r.page.pageStatus,r.selectedMode,r.baselines.textOnly.score,r.baselines.textOnly.tier,r.baselines.metadataOnly.score,r.baselines.metadataOnly.tier,r.baselines.multiSignal.score,r.baselines.multiSignal.tier,r.fullWorkflow?.score,r.fullWorkflow?.tier,r.groundTruth,r.interfaceCondition,r.participantResponse?.decision,r.participantResponse?.actionability,r.participantResponse?.decisionTimeMs,r.localScoringLatencyMs,r.totalLatencyMs,r.escalation.status,r.scenarioId,r.groupId,r.split,r.overlapCategory,r.configId,r.page.extractionStatusCode,r.page.rootSource,r.baselines.textOnly.evidenceSum,r.baselines.metadataOnly.evidenceSum,r.annotatorId,r.annotationProtocolVersion,r.reference?.labelledAt,r.reference?.recordedBeforePrediction,r.reference?.rationale,r.reference?.rationaleRecordedAt,r.reference?.rationaleRecordedBeforePrediction]);download("careerguard-evaluation.csv",[header,...rows].map(row=>row.map(csvCell).join(",")).join("\n"),"text/csv");});
+el.records.addEventListener("click",async event=>{
+  const button=event.target.closest("button[data-delete-scan]");
+  if(!button || button.disabled)return;
+  const id=button.dataset.deleteScan, status=document.getElementById("historyStatus");
+  if(!confirm("Delete this scan record? Registered cases, reference answers and other scan attempts will be kept. Export first if you need a copy."))return;
+  button.disabled=true;
+  try {
+    const stored=await chrome.storage.local.get(["scanLogs","lastScan"]);
+    const retained=(stored.scanLogs||[]).filter(record=>record.id!==id);
+    if(retained.length===(stored.scanLogs||[]).length) {await load();status.textContent="This scan record has already been removed.";return;}
+    const update={scanLogs:retained};
+    if(stored.lastScan?.id===id)update.lastScan=null;
+    await chrome.storage.local.set(update);await load();
+    status.textContent="Scan record deleted. Registered cases and reference answers were kept.";
+  }catch {button.disabled=false;status.textContent="Deletion failed. Reload and check the retained records before retrying.";}
+});
 el.clear.addEventListener("click",async()=>{if(!confirm("Clear all local scan history, including successful scans, failures and the latest result? Registered cases and reference answers will be kept."))return;await chrome.storage.local.set({scanLogs:[],extractionFailures:[],lastScan:null});await load();});
 async function safeLoad(){
   try {await load();el.exportJson.disabled=false;el.exportCsv.disabled=false;}

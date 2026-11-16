@@ -109,5 +109,28 @@ try {
   assert.deepEqual(await page.evaluate(() => stored.scanLogs.map(r=>r.scenarioId)), ["other"]);
   assert.deepEqual(await page.evaluate(() => stored.extractionFailures.map(r=>r.scenarioId)), ["other"]);
   assert.equal(await page.evaluate(() => stored.lastScan), null);
+  await page.evaluate(()=>{
+    const result={score:5,tier:"low"};
+    const row=id=>({id,scenarioId:"kept-case",createdAt:new Date().toISOString(),page:{title:"Engineer"},baselines:{textOnly:result,metadataOnly:result,multiSignal:result},escalation:{status:"not-required"}});
+    stored.scanLogs=[row("delete-one"),row("keep-two")];stored.lastScan=structuredClone(stored.scanLogs[0]);
+    stored.testCases=[{scenarioId:"kept-case",url:"https://example.com/job",groundTruth:null,firstPredictionAt:"2026-11-01T00:00:00Z"}];
+    stored.rq1HeldOutAccessAt="2026-11-01T00:00:00Z";
+  });
+  await page.click("#exportJson");
+  await page.waitForSelector('[data-delete-scan="delete-one"]');
+  page.removeAllListeners("dialog");page.once("dialog",dialog=>dialog.dismiss());
+  await page.click('[data-delete-scan="delete-one"]');
+  assert.equal(await page.evaluate(()=>stored.scanLogs.length),2);
+  page.on("dialog",dialog=>dialog.accept());
+  const beforeDelete=await page.evaluate(()=>({cases:stored.testCases,failures:stored.extractionFailures,access:stored.rq1HeldOutAccessAt}));
+  await page.click('[data-delete-scan="delete-one"]');
+  await page.waitForFunction(()=>document.getElementById("historyStatus").textContent.startsWith("Scan record deleted"));
+  assert.deepEqual(await page.evaluate(()=>stored.scanLogs.map(r=>r.id)),["keep-two"]);
+  assert.equal(await page.evaluate(()=>stored.lastScan),null);
+  assert.deepEqual(await page.evaluate(()=>({cases:stored.testCases,failures:stored.extractionFailures,access:stored.rq1HeldOutAccessAt})),beforeDelete);
+  await page.click('[data-delete-scan="keep-two"]');
+  await page.waitForFunction(()=>stored.scanLogs.length===0);
+  assert.ok(await page.locator("#records").textContent().then(text=>text.includes("No scans recorded")));
+  assert.equal(await page.locator('#historyTableControls [data-page="next"]').isDisabled(),true);
   console.log("dashboard success/failure counts, median/p95 presentation and full reset passed");
 }finally{await browser.close();}
