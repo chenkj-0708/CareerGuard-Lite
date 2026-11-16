@@ -34,6 +34,7 @@ try {
     const id=`${split}-${i}`;
     await page.fill("#testId",id);await page.fill("#testUrl",`https://example.com/${id}`);
     await page.selectOption("#testLabel",["low","uncertain","elevated"][i%3]);
+    await page.fill("#testRationale",`Observed evidence for ${id}.`);
     await page.fill("#testGroup",`group-${id}`);await page.selectOption("#testSplit",split);await page.selectOption("#testOverlap","LOWER-OVERLAP");
     await page.click('#caseForm button[type="submit"]');
     await page.waitForFunction(id=>document.getElementById("caseStatus").textContent.includes(`Saved ${id}.`),id);
@@ -52,6 +53,7 @@ try {
   const exported=await page.evaluate(()=>JSON.parse(downloaded));
   assert.equal(exported.analysisContract.sealedBeforeHeldOut,true);
   assert.equal(exported.records.length,30);
+  assert.ok(exported.records.every(r=>r.reference.rationale===`Observed evidence for ${r.scenarioId}.`&&r.reference.rationaleRecordedBeforePrediction));
   assert.ok(exported.records.every(r=>r.annotatorId==="researcher-1"&&r.annotationProtocolVersion==="single-rubric-v1"&&r.overlapCategory==="LOWER-OVERLAP"&&r.reference.recordedBeforePrediction));
   assert.equal(await page.evaluate(()=>stored.scanLogs.some(r=>r.groundTruth!==null)),false);
   const run=payload=>JSON.parse(execFileSync(process.env.CG_PYTHON||"python",["-c","import sys,json; from analysis.evaluate import evaluate; print(json.dumps(evaluate(json.load(sys.stdin),10)))"],{cwd:fileURLToPath(new URL("..",import.meta.url)),input:JSON.stringify(payload),encoding:"utf8"}));

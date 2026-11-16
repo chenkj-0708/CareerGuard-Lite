@@ -2,7 +2,7 @@ import { combineBackend, scoreAll } from "./lib/scoring.js";
 import { CONFIG_ID } from "./lib/risk-rules.js";
 import { BACKEND_URL } from "./lib/backend-client.js";
 import { scenarioIdForUrl } from "./lib/scan-statistics.js";
-import { matchTestCase } from "./lib/test-cases.js";
+import { matchTestCase, TestCaseIdentificationError } from "./lib/test-cases.js";
 import { validatePageSignal, PageSignalValidationError } from "./lib/page-signal.js";
 import { excerptHash, HASH_CONTRACT_VERSION } from "./lib/hash-contract.js";
 
@@ -110,7 +110,7 @@ async function scan(options = {}) {
     const code = Object.hasOwn(FAILURE_REASONS, error?.failureCode) ? error.failureCode : STAGE_FAILURE[attempt.stage] || "SYSTEM_ERROR";
     const page = attempt.page;
     const validationError=error instanceof PageSignalValidationError;
-    const reason = FAILURE_REASONS[code] + (validationError ? " " + error.message : "");
+    const reason = FAILURE_REASONS[code] + (validationError || error instanceof TestCaseIdentificationError ? " " + error.message : "");
     const failure = {
       id: attempt.id, attemptId: attempt.id, createdAt: new Date().toISOString(), startedAt: attempt.startedAt,
       scenarioId: attempt.scenarioId, scenarioIdentityVersion: options.scenarioId || attempt.testCase ? "manifest-v1" : "page-url-v1", groupId: attempt.testCase?.groupId || options.groupId || null,
@@ -152,7 +152,10 @@ async function performScan(options, attempt) {
   const { testCases = [] } = await storageGet(["testCases"]);
   let testCase;
   try { testCase = matchTestCase(testCases,tab.url,options.scenarioId); }
-  catch { throw Object.assign(new Error("Test case mismatch"),{failureCode:"CASE_MISMATCH"}); }
+  catch (error) {
+    if (error instanceof TestCaseIdentificationError) throw Object.assign(error,{failureCode:"CASE_MISMATCH"});
+    throw Object.assign(new Error("Test case registry is invalid"),{failureCode:"CASE_MISMATCH"});
+  }
   if(testCase){
     attempt.scenarioId=testCase.scenarioId;
     options={...options,scenarioId:testCase.scenarioId,groupId:testCase.groupId||null,split:testCase.split||null};

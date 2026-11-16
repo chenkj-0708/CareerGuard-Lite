@@ -46,6 +46,8 @@
         <label>Case ID<input id="testId" placeholder="CG-001" required pattern="[A-Za-z0-9_\-]{1,80}"></label>
         <label>Page URL<input id="testUrl" type="url" placeholder="https://…" required></label>
         <label>Your answer<select id="testLabel"><option value="">Not labelled yet</option><option value="low">Low</option><option value="uncertain">Uncertain</option><option value="elevated">Elevated</option><option value="reference-insufficient">Insufficient information</option></select></label>
+        <label>Reason for your answer<textarea id="testRationale" maxlength="2000" rows="3" placeholder="Explain your judgement in one or two sentences using evidence you observed on the page."></textarea></label>
+        <p class="form-help">Write your reason before scanning. Later additions or edits have their own timestamp; they do not change the original label time. Do not include personal data.</p>
         <label>Group ID (optional)<input id="testGroup" placeholder="GROUP-001"></label>
         <label>Split<select id="testSplit"><option value="">Not assigned</option><option value="development">Development</option><option value="validation">Validation</option><option value="test">Test</option></select></label>
         <label>Reference overlap category<select id="testOverlap"><option value="">Not assigned</option><option value="DIRECT">Direct</option><option value="RELATED">Related</option><option value="LOWER-OVERLAP">Lower-overlap</option></select></label>
