@@ -159,7 +159,7 @@ function csvCell(value) { const text=String(value??"");return /[",\n]/.test(text
 async function load() {
   const stored=await chrome.storage.local.get(["scanLogs","extractionFailures","testCases","analysisContract","rq1HeldOutAccessAt"]);
   researchExport=await buildResearchExport(stored);testCases=validateTestCases(stored.testCases||[]);logs=researchExport.records;extractionFailures=researchExport.extractionFailures;analysisContract=researchExport.analysisContract;
-  el.backendUrl.value=BACKEND_URL;render();
+  el.backendUrl.value=BACKEND_URL;render();scheduleNavigationUpdate();
 }
 el.researchForm.addEventListener("submit",async event=>{
   event.preventDefault();
@@ -264,16 +264,35 @@ safeLoad().then(renderResearchForm);
 chrome.storage.onChanged?.addListener((_changes,area)=>{if(area === "local")safeLoad();});
 
 // Deep links open the relevant workspace without exposing every form at once.
+function setActiveNavigation(id) {
+  document.querySelectorAll("nav a").forEach(link=>{
+    const active=link.hash===`#${id}`;
+    link.classList.toggle("active",active);
+    if(active)link.setAttribute("aria-current","location");
+    else link.removeAttribute("aria-current");
+  });
+}
+function updateNavigationFromScroll() {
+  const sections=[...document.querySelectorAll("nav a")].map(link=>document.getElementById(link.hash.slice(1))).filter(Boolean);
+  const boundary=(document.querySelector("nav")?.getBoundingClientRect().bottom||0)+48;
+  let current=sections[0];
+  for(const section of sections)if(section.getBoundingClientRect().top<=boundary)current=section;
+  if(window.scrollY>0 && Math.ceil(window.scrollY+window.innerHeight)>=document.documentElement.scrollHeight-2)current=sections.at(-1);
+  if(current)setActiveNavigation(current.id);
+}
+let navigationFrame=null;
+function scheduleNavigationUpdate() {
+  if(navigationFrame!==null)return;
+  navigationFrame=requestAnimationFrame(()=>{navigationFrame=null;updateNavigationFromScroll();});
+}
+window.addEventListener("scroll",scheduleNavigationUpdate,{passive:true});
+window.addEventListener("resize",scheduleNavigationUpdate);
+document.querySelectorAll("details.disclosure").forEach(section=>section.addEventListener("toggle",scheduleNavigationUpdate));
 function revealSection() {
   const id = location.hash.slice(1);
   const section = document.getElementById(id);
   if (section?.matches("details.disclosure")) section.open = true;
-  document.querySelectorAll("nav a").forEach(link => {
-    const active = link.hash === (location.hash || "#overview");
-    link.classList.toggle("active", active);
-    if (active) link.setAttribute("aria-current", "location");
-    else link.removeAttribute("aria-current");
-  });
+  setActiveNavigation(id||"overview");
 }
 window.addEventListener("hashchange", revealSection);
 document.querySelectorAll('a[href^="#"]').forEach(link => link.addEventListener("click", () => {
@@ -281,3 +300,4 @@ document.querySelectorAll('a[href^="#"]').forEach(link => link.addEventListener(
   if (section?.matches("details.disclosure")) section.open = true;
 }));
 revealSection();
+scheduleNavigationUpdate();

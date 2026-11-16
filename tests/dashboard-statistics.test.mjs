@@ -132,5 +132,22 @@ try {
   await page.waitForFunction(()=>stored.scanLogs.length===0);
   assert.ok(await page.locator("#records").textContent().then(text=>text.includes("No scans recorded")));
   assert.equal(await page.locator('#historyTableControls [data-page="next"]').isDisabled(),true);
-  console.log("dashboard success/failure counts, median/p95 presentation and full reset passed");
+  await page.evaluate(()=>{
+    document.documentElement.style.scrollBehavior="auto";
+    for(const id of ["protocol","cases","history","connection"]){
+      const section=document.getElementById(id);if(section.tagName==="DETAILS")section.open=true;
+      section.style.minHeight="900px";
+    }
+  });
+  for(const id of ["overview","protocol","cases","history","connection"]){
+    await page.evaluate(id=>{const section=document.getElementById(id);window.scrollTo(0,window.scrollY+section.getBoundingClientRect().top-75);},id);
+    await page.waitForFunction(id=>document.querySelector("nav a.active")?.hash===`#${id}`,id);
+    assert.equal(await page.locator(`nav a[href="#${id}"]`).getAttribute("aria-current"),"location");
+    assert.equal(await page.locator("nav a.active").count(),1);
+  }
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.waitForFunction(()=>document.querySelector("nav a.active")?.hash==="#overview");
+  await page.click('nav a[href="#cases"]');
+  await page.waitForFunction(()=>document.querySelector("nav a.active")?.hash==="#cases" && document.getElementById("cases").open);
+  console.log("dashboard statistics, row deletion, scroll navigation and anchor links passed");
 }finally{await browser.close();}
