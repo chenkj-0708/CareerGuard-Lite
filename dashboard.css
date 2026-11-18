@@ -135,4 +135,17 @@ th:last-child,td:last-child{border-right:0}
 th{border-top-color:#bdcec2;border-bottom:2px solid #adbfB2}
 tbody tr:last-child td{border-bottom:0}
 .research-checks,#caseForm{border-color:#bdcec2}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@keyframes workspace-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.page-title{animation:workspace-enter .32s ease-out both}
+.card{animation:workspace-enter .35s ease-out both;transition:box-shadow .2s ease,border-color .2s ease}
+.card:nth-child(2){animation-delay:40ms}.card:nth-child(3){animation-delay:80ms}.card:nth-child(4){animation-delay:120ms}
+.card:hover{border-color:#89ad97;box-shadow:0 5px 16px #193e300c}
+nav a,.quiet-link{transition:background-color .18s ease,color .18s ease,box-shadow .18s ease}
+button{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .12s ease}
+button:not(:disabled):active{transform:translateY(1px)}
+input,select,textarea{transition:border-color .18s ease,box-shadow .18s ease}
+input:focus,select:focus,textarea:focus{border-color:#648f75;box-shadow:0 0 0 3px #17654810}
+td,th{transition:background-color .16s ease,color .16s ease}
+.disclosure>summary{transition:background-color .18s ease}
+.disclosure[open]>.disclosure-body{animation:workspace-enter .22s ease-out both}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}button:not(:disabled):active{transform:none}}

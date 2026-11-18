@@ -91,7 +91,7 @@ function enhanceTable(table, key, caseColumn) {
     tableWrap=document.createElement("div");tableWrap.className="table-wrap";
     table.before(tableWrap);tableWrap.append(table);
   }
-  const state = tableStates.get(key) || { size:10, page:0, column:caseColumn, direction:"default" };
+  const state = tableStates.get(key) || { size:100, page:0, column:caseColumn, direction:"default" };
   tableStates.set(key,state);
   const body=table.tBodies[0], headers=[...table.tHead.rows[0].cells];
   const rows=[...body.rows].filter(row=>row.cells.length===headers.length);
@@ -131,9 +131,14 @@ function enhanceTable(table, key, caseColumn) {
   }
   headers.forEach((cell,index)=>{
     cell.replaceChildren();const button=document.createElement("button");button.type="button";button.className="table-sort";
-    button.title="Toggle default (Case ID ascending), ascending, descending";
+    button.title=index===caseColumn?"Toggle Case ID ascending or descending":"Toggle default (Case ID ascending), ascending, descending";
     button.addEventListener("click",()=>{
-      state.direction=state.column!==index||state.direction==="default"?"ascending":state.direction==="ascending"?"descending":"default";
+      if(index===caseColumn){
+        const caseIdAscending=state.direction==="default"||(state.column===caseColumn&&state.direction==="ascending");
+        state.direction=caseIdAscending?"descending":"ascending";
+      }else{
+        state.direction=state.column!==index||state.direction==="default"?"ascending":state.direction==="ascending"?"descending":"default";
+      }
       state.column=index;state.page=0;update();
     });cell.append(button);
   });
@@ -158,8 +163,22 @@ function csvCell(value) { const text=String(value??"");return /[",\n]/.test(text
 
 async function load() {
   const stored=await chrome.storage.local.get(["scanLogs","extractionFailures","testCases","analysisContract","rq1HeldOutAccessAt"]);
-  researchExport=await buildResearchExport(stored);testCases=validateTestCases(stored.testCases||[]);logs=researchExport.records;extractionFailures=researchExport.extractionFailures;analysisContract=researchExport.analysisContract;
+  const cases=validateTestCases(stored.testCases||[]);
+  let pairingError=null;
+  try { researchExport=await buildResearchExport(stored); }
+  catch(error) { researchExport=null;pairingError=error; }
+  testCases=cases;
+  logs=researchExport?.records??stored.scanLogs??[];
+  extractionFailures=researchExport?.extractionFailures??stored.extractionFailures??[];
+  analysisContract=researchExport?.analysisContract??{...defaultResearchContract(),...stored.analysisContract};
+  el.exportJson.disabled=el.exportCsv.disabled=!!pairingError;
   el.backendUrl.value=BACKEND_URL;render();scheduleNavigationUpdate();
+  if(pairingError){
+    el.researchReadiness.textContent=`Research export unavailable: ${pairingError.message}`;
+    el.summary.innerHTML="";
+    el.metricsNote.textContent="Reference agreement is unavailable until the research data can be paired.";
+  }
+  return pairingError;
 }
 el.researchForm.addEventListener("submit",async event=>{
   event.preventDefault();
@@ -189,7 +208,7 @@ el.caseForm.addEventListener("submit",async event=>{
   try{
     const scenarioId=el.testId.value.trim(),existing=testCases.find(c=>c.scenarioId===scenarioId);
     const item={...existing,scenarioId,url:el.testUrl.value.trim(),groundTruth:el.testLabel.value||null,groupId:el.testGroup.value.trim()||null,split:el.testSplit.value||null,overlapCategory:el.testOverlap.value||null};
-    if(existing && existing.url!==item.url)throw new Error("This ID already belongs to a page. Use a new ID for a different page.");
+    if(existing && !el.testId.readOnly && existing.url!==item.url)throw new Error("This ID already belongs to a page. Use Edit to change its URL.");
     if(existing && (existing.firstPredictionAt || [...logs,...extractionFailures].some(r=>r.scenarioId===scenarioId)) && ["groupId","split","overlapCategory"].some(key=>(existing[key]||null)!==(item[key]||null)))throw new Error("This case already has scans. Group, split and overlap category must remain fixed.");
     Object.assign(item,updateReferenceRationale(existing,el.testRationale.value));
     const newReference=!!item.groundTruth && (!existing || existing.groundTruth!==item.groundTruth || el.testRefreshReference.checked);
@@ -224,6 +243,8 @@ el.testCases.addEventListener("click",async event=>{
   }
   el.testId.value=item.scenarioId;el.testId.readOnly=true;el.testUrl.value=item.url;el.testLabel.value=item.groundTruth||"";el.testRationale.value=item.rationale||"";el.testGroup.value=item.groupId||"";el.testSplit.value=item.split||"";el.testOverlap.value=item.overlapCategory||"";el.testRefreshReference.checked=false;
   el.caseStatus.textContent=`Editing ${id}. Use New / cancel edit to register another case.`;
+  el.testLabel.focus({preventScroll:true});
+  el.caseForm.scrollIntoView({block:"start"});
 });
 el.health.addEventListener("click",async()=>{
   el.health.disabled=true;el.healthStatus.textContent="Service: checking · Index: checking";
@@ -235,7 +256,7 @@ el.health.addEventListener("click",async()=>{
   } finally { el.health.disabled=false; }
 });
 el.exportJson.addEventListener("click",async()=>{
-  try {await load();download("careerguard-evaluation.json",JSON.stringify({...researchExport,rq2Summary:scanStatistics(logs,extractionFailures)},null,2),"application/json");}
+  try {const pairingError=await load();if(pairingError)throw pairingError;download("careerguard-evaluation.json",JSON.stringify({...researchExport,rq2Summary:scanStatistics(logs,extractionFailures)},null,2),"application/json");}
   catch(error){el.caseStatus.textContent=`Cannot export research data: ${error.message}`;}
 });
 el.exportCsv.addEventListener("click",()=>{const header=["id","created_at","url","page_status","selected_mode","text_score","text_tier","metadata_score","metadata_tier","multi_score","multi_tier","full_score","full_tier","ground_truth","interface_condition","participant_decision","actionability","decision_time_ms","local_scoring_latency_ms","total_latency_ms","escalation_status","scenario_id","group_id","split","overlap_category","config_id","extraction_status_code","root_source","text_evidence","metadata_evidence","annotator_id","annotation_protocol_version","reference_labelled_at","reference_before_prediction","reference_rationale","rationale_recorded_at","rationale_before_prediction"];const rows=logs.map(r=>[r.id,r.createdAt,r.page.url,r.page.pageStatus,r.selectedMode,r.baselines.textOnly.score,r.baselines.textOnly.tier,r.baselines.metadataOnly.score,r.baselines.metadataOnly.tier,r.baselines.multiSignal.score,r.baselines.multiSignal.tier,r.fullWorkflow?.score,r.fullWorkflow?.tier,r.groundTruth,r.interfaceCondition,r.participantResponse?.decision,r.participantResponse?.actionability,r.participantResponse?.decisionTimeMs,r.localScoringLatencyMs,r.totalLatencyMs,r.escalation.status,r.scenarioId,r.groupId,r.split,r.overlapCategory,r.configId,r.page.extractionStatusCode,r.page.rootSource,r.baselines.textOnly.evidenceSum,r.baselines.metadataOnly.evidenceSum,r.annotatorId,r.annotationProtocolVersion,r.reference?.labelledAt,r.reference?.recordedBeforePrediction,r.reference?.rationale,r.reference?.rationaleRecordedAt,r.reference?.rationaleRecordedBeforePrediction]);download("careerguard-evaluation.csv",[header,...rows].map(row=>row.map(csvCell).join(",")).join("\n"),"text/csv");});
@@ -257,11 +278,13 @@ el.records.addEventListener("click",async event=>{
 });
 el.clear.addEventListener("click",async()=>{if(!confirm("Clear all local scan history, including successful scans, failures and the latest result? Registered cases and reference answers will be kept."))return;await chrome.storage.local.set({scanLogs:[],extractionFailures:[],lastScan:null});await load();});
 async function safeLoad(){
-  try {await load();el.exportJson.disabled=false;el.exportCsv.disabled=false;}
+  try {await load();}
   catch(error){el.caseStatus.textContent=`Cannot pair research data: ${error.message}`;el.exportJson.disabled=true;el.exportCsv.disabled=true;}
 }
 safeLoad().then(renderResearchForm);
-chrome.storage.onChanged?.addListener((_changes,area)=>{if(area === "local")safeLoad();});
+chrome.storage.onChanged?.addListener((changes,area)=>{
+  if(area==="local"&&["scanLogs","extractionFailures","testCases","analysisContract","rq1HeldOutAccessAt"].some(key=>key in changes))safeLoad();
+});
 
 // Deep links open the relevant workspace without exposing every form at once.
 function setActiveNavigation(id) {

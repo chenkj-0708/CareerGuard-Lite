@@ -68,3 +68,18 @@ header .local-badge{color:var(--green);border-color:#b8cbbf;background:#eef6f0}
 .tier.elevated{background:#fbe0dc}
 .advice{background:#edf3ed;border-radius:9px;padding:12px;color:#193e2c}
 footer{background:#fff}.link{border:1px solid #b8cbbf;border-radius:8px;padding:8px 10px;background:#fff}.link:hover{background:#edf5ef}
+@keyframes panel-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes meter-enter{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes scan-spin{to{transform:rotate(360deg)}}
+.intro{animation:panel-enter .3s ease-out both}
+#result:not([hidden]){animation:panel-enter .25s ease-out both}
+.risk-track span{transform-origin:left;animation:meter-enter .5s cubic-bezier(.2,.7,.3,1) both}
+button{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .12s ease}
+button:not(:disabled):active{transform:translateY(1px)}
+.research-option,summary,input{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease}
+.research-option:hover{border-color:#89ad97}
+.research-option[open]>label,.research-option[open]>p,.technical-details[open]>p{animation:panel-enter .2s ease-out both}
+input:focus{border-color:#648f75;box-shadow:0 0 0 3px #17654810}
+#scan:disabled>span{display:none}
+#scan:disabled::after{content:"";width:15px;height:15px;border:2px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:scan-spin .8s linear infinite;flex:none}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}button:not(:disabled):active{transform:none}}

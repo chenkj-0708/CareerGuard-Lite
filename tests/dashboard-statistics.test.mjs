@@ -14,7 +14,7 @@ try {
   await page.addInitScript(()=>{
     const result={score:5,tier:"low"};
     globalThis.stored={scanLogs:[{id:"a1",attemptId:"a1",scenarioId:"a",createdAt:"2026-11-05T00:00:00Z",totalLatencyMs:100,page:{title:"Engineer",domain:"example.com"},baselines:{textOnly:result,metadataOnly:result,multiSignal:result},escalation:{status:"not-required"}}],extractionFailures:[{id:"b1",attemptId:"b1",scenarioId:"b",createdAt:"2026-11-05T00:00:01Z",totalLatencyMs:800,failureCode:"INJECTION_FAILED"}]};
-    globalThis.chrome={storage:{local:{async get(){return structuredClone(globalThis.stored)},async set(value){Object.assign(globalThis.stored,value)}}},downloads:{download(options){fetch(options.url).then(r=>r.text()).then(text=>{globalThis.downloaded=text;});}}};
+    globalThis.chrome={storage:{onChanged:{addListener(listener){globalThis.storageChanged=listener;}},local:{async get(){return structuredClone(globalThis.stored)},async set(value){Object.assign(globalThis.stored,value)}}},downloads:{download(options){fetch(options.url).then(r=>r.text()).then(text=>{globalThis.downloaded=text;});}}};
   });
   await page.goto("https://extension.test/dashboard.html");
   await page.waitForFunction(()=>document.getElementById("scanSummary").textContent.includes("50.0%"));
@@ -95,9 +95,23 @@ try {
   assert.ok(csv.includes("researcher-1,single-rubric-v1"));
   await page.click('[data-edit-case="CG-001"]');
   assert.equal(await page.locator("#testId").getAttribute("readonly"), "");
+  assert.equal(await page.locator("#testLabel").evaluate(input=>input===document.activeElement), true);
   await page.click("#newCase");
   assert.equal(await page.locator("#testId").inputValue(), "");
   assert.equal(await page.locator("#testId").getAttribute("readonly"), null);
+  await page.evaluate(()=>{
+    stored.scanLogs[0].groundTruth=stored.testCases[0].groundTruth==="low"?"elevated":"low";
+    storageChanged({scanLogs:{newValue:stored.scanLogs}},"local");
+  });
+  await page.waitForFunction(()=>document.getElementById("researchReadiness").textContent.includes("Human answer conflict"));
+  assert.equal(await page.locator("#exportJson").isDisabled(), true);
+  await page.click('[data-edit-case="CG-001"]');
+  await page.fill("#testUrl","https://example.com/updated-job");
+  await page.fill("#testRationale","Updated reason after reopening the dashboard.");
+  await page.click('#caseForm button[type="submit"]');
+  await page.waitForFunction(()=>document.getElementById("caseStatus").textContent.includes("Saved CG-001"));
+  assert.equal(await page.evaluate(()=>stored.testCases[0].rationale),"Updated reason after reopening the dashboard.");
+  assert.equal(await page.evaluate(()=>stored.testCases[0].url),"https://example.com/updated-job");
   await page.evaluate(() => {
     stored.lastScan = { scenarioId:"CG-001" };
     stored.extractionFailures = [{scenarioId:"CG-001", id:"failed"}, {scenarioId:"other", id:"retained"}];
