@@ -9,7 +9,9 @@ import statistics
 from collections import defaultdict
 
 GRADE = {"low": 0, "uncertain": 1, "elevated": 2}
-SENSITIVITIES = ("priorWeight", "rawScaling", "lowerBoundaries", "upperBoundaries")
+SENSITIVITIES = ("rawScaling", "lowerBoundaries", "upperBoundaries")
+LEGACY_CONFIG_ID = "thesis-primary-50-50-v1"
+POSITIVE_EVIDENCE_CONFIG_ID = "thesis-positive-evidence-v2"
 
 def reference_checks(rows, contract, mode):
     """Check every included reference; never estimate reliability from a subset."""
@@ -69,7 +71,8 @@ def class_metrics(rows, key):
             "linear_weighted_kappa":kappa(pairs), "unweighted_kappa":kappa(pairs,False)}
 
 def prediction(row,key):
-    if key in SENSITIVITIES: return row["baselines"]["sensitivities"][key]["tier"]
+    if key not in ("textOnly", "metadataOnly", "multiSignal"):
+        return row["baselines"]["sensitivities"][key]["tier"]
     return row["baselines"][key]["tier"]
 
 def group_errors(rows,key):
@@ -109,6 +112,9 @@ def support(rows):
 def evaluate_rq1(records,contract=None,resamples=10000):
     contract=contract or {}; exclusions=defaultdict(int); eligible=[]; seen={}; problems=[]
     mode = contract.get("annotationMode", "dual")
+    config_id = contract.get("configId", LEGACY_CONFIG_ID)
+    if config_id not in (LEGACY_CONFIG_ID, POSITIVE_EVIDENCE_CONFIG_ID):
+        problems.append("unknown_scoring_configuration")
     version = "rq1-single-annotator-v1" if mode == "single" else "rq1-thesis-v1"
     if mode not in ("single", "dual"):
         problems.append("unknown_annotation_mode")
@@ -125,7 +131,7 @@ def evaluate_rq1(records,contract=None,resamples=10000):
             exclusions["extraction_failure"]+=1; continue
         if not isinstance(row.get("groupId"), str) or not row["groupId"] or row.get("split") not in ("validation","test") or row.get("overlapCategory") not in ("DIRECT","RELATED","LOWER-OVERLAP"):
             exclusions["missing_group_split_or_overlap"]+=1; continue
-        if row.get("configId") != "thesis-primary-50-50-v1":
+        if row.get("configId") != config_id:
             exclusions["legacy_or_unknown_configuration"]+=1; continue
         if any(row.get("baselines",{}).get(k,{}).get("tier") not in GRADE for k in ("textOnly","metadataOnly","multiSignal")):
             exclusions["incomplete_paired_prediction"]+=1; continue
@@ -142,7 +148,7 @@ def evaluate_rq1(records,contract=None,resamples=10000):
     val=[r for r in eligible if r["split"]=="validation"]; test=[r for r in eligible if r["split"]=="test"]
     if {r["groupId"] for r in val} & {r["groupId"] for r in test}: problems.append("cross_split_group_leakage")
     agreement, reference_missing = reference_checks(eligible, contract, mode)
-    output={"analysisVersion":version,"annotationMode":mode,"target":"project advisory reference, not fraud truth",
+    output={"analysisVersion":version,"configId":config_id,"annotationMode":mode,"target":"project advisory reference, not fraud truth",
             "reference_agreement":agreement,
             "claim_scope":"single-researcher exploratory reference agreement; not independent fraud validation" if mode == "single" else "pilot/feasibility effect estimation",
             "limitations":["Single researcher supplies reference labels; inter-rater reliability is unavailable and developer-reference bias is possible."] if mode == "single" else [],
@@ -159,7 +165,9 @@ def evaluate_rq1(records,contract=None,resamples=10000):
     lower_result=compare(lower,single,resamples=resamples)
     strata={category:compare([r for r in test if r["overlapCategory"]==category],single,resamples=resamples) for category in ("DIRECT","RELATED","LOWER-OVERLAP")}
     sensitivity={}
-    for key in SENSITIVITIES:
+    weight_sensitivity = "reducedMetadata" if config_id == POSITIVE_EVIDENCE_CONFIG_ID else "priorWeight"
+    sensitivity_keys = (weight_sensitivity, *SENSITIVITIES)
+    for key in sensitivity_keys:
         if all(r.get("baselines",{}).get("sensitivities",{}).get(key,{}).get("tier") in GRADE for r in test):
             sensitivity[key]={"overall":compare(test,single,key,resamples=resamples),"lower_overlap":compare(lower,single,key,resamples=resamples)}
         else: sensitivity[key]={"status":"missing paired sensitivity predictions"}

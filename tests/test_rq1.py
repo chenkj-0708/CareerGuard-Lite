@@ -1,6 +1,6 @@
 import copy
 import unittest
-from analysis.rq1 import evaluate_rq1,maoe,kappa,compare
+from analysis.rq1 import POSITIVE_EVIDENCE_CONFIG_ID, evaluate_rq1,maoe,kappa,compare
 
 
 def row(identifier,group,split,truth,text,meta,fused,overlap="LOWER-OVERLAP"):
@@ -19,6 +19,20 @@ def corpus():
 
 
 class RQ1Tests(unittest.TestCase):
+    def test_bound_configuration_excludes_old_runs_and_uses_its_sensitivities(self):
+        rows, contract = self.single_study()
+        old = copy.deepcopy(rows[0])
+        contract["configId"] = POSITIVE_EVIDENCE_CONFIG_ID
+        for record in rows:
+            record["configId"] = POSITIVE_EVIDENCE_CONFIG_ID
+            sensitivities = record["baselines"]["sensitivities"]
+            sensitivities["reducedMetadata"] = sensitivities.pop("priorWeight")
+        result = evaluate_rq1([old, *rows], contract, resamples=0)
+        self.assertEqual(result["exclusions"]["legacy_or_unknown_configuration"], 1)
+        self.assertEqual(result["validation_support"]["scenarios"], 15)
+        self.assertIn("overall", result["sensitivities"]["reducedMetadata"])
+        self.assertNotIn("complete_sensitivity_set", result["missing_gates"])
+
     def test_warmup_cannot_conflict_with_measured_reference(self):
         rows = corpus()
         warmup = copy.deepcopy(rows[0])

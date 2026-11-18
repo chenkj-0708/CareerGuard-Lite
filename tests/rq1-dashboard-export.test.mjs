@@ -5,6 +5,7 @@ import path from "node:path";
 import {createRequire} from "node:module";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
+import {CONFIG_ID} from "../lib/risk-rules.js";
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.CG_PLAYWRIGHT||"playwright");
 const browser=await chromium.launch({headless:true,channel:"msedge"});
@@ -40,19 +41,20 @@ try {
     await page.click('#caseForm button[type="submit"]');
     await page.waitForFunction(id=>document.getElementById("caseStatus").textContent.includes(`Saved ${id}.`),id);
   }
-  await page.evaluate(()=>{
+  await page.evaluate(configId=>{
     const result=tier=>({tier,score:{low:5,uncertain:45,elevated:80}[tier]});
     stored.scanLogs=stored.testCases.map((item,i)=>{
       const truth=item.groundTruth,wrong=truth==="low"?"elevated":"low",fused=item.split==="validation"?truth:"uncertain";
       return {id:`run-${i}`,scenarioId:item.scenarioId,startedAt:new Date().toISOString(),createdAt:new Date().toISOString(),
-        groupId:item.groupId,split:item.split,configId:"thesis-primary-50-50-v1",groundTruth:null,page:{pageStatus:"scoreable",title:item.scenarioId},
+        groupId:item.groupId,split:item.split,configId,groundTruth:null,page:{pageStatus:"scoreable",title:item.scenarioId},
         baselines:{textOnly:result(item.split==="validation"?wrong:truth),metadataOnly:result(item.split==="validation"?truth:wrong),multiSignal:result(fused),
-          sensitivities:Object.fromEntries(["priorWeight","rawScaling","lowerBoundaries","upperBoundaries"].map(k=>[k,result(fused)]))}};
+          sensitivities:Object.fromEntries(["reducedMetadata","rawScaling","lowerBoundaries","upperBoundaries"].map(k=>[k,result(fused)]))}};
     });
-  });
+  }, CONFIG_ID);
   await page.click("#exportJson");await page.waitForFunction(()=>globalThis.downloaded);
   const exported=await page.evaluate(()=>JSON.parse(downloaded));
   assert.equal(exported.analysisContract.sealedBeforeHeldOut,true);
+  assert.equal(exported.analysisContract.configId,CONFIG_ID);
   assert.equal(exported.records.length,30);
   assert.ok(exported.records.every(r=>r.reference.rationale===`Observed evidence for ${r.scenarioId}.`&&r.reference.rationaleRecordedBeforePrediction));
   assert.ok(exported.records.every(r=>r.annotatorId==="researcher-1"&&r.annotationProtocolVersion==="single-rubric-v1"&&r.overlapCategory==="LOWER-OVERLAP"&&r.reference.recordedBeforePrediction));
@@ -75,7 +77,7 @@ try {
     const table=key==="cases"?page.locator("#testCases table"):page.locator("#records").locator("..");
     const body=table.locator("tbody"), caseColumn=key==="cases"?0:1;
     const firstId=()=>body.locator("tr").first().locator("td").nth(caseColumn).textContent();
-    assert.equal(await body.locator("tr").count(),10);
+    assert.equal(await body.locator("tr").count(),30);
     assert.equal(await firstId(),"test-0");
     await page.selectOption(`#${key}TableControls select`,"5");
     assert.equal(await body.locator("tr").count(),5);
@@ -102,6 +104,11 @@ try {
     const headers=table.locator("thead th");
     for(let i=0;i<await headers.count();i++) {
       const header=headers.nth(i);
+      if(i===caseColumn) {
+        await header.locator("button").click();assert.equal(await header.getAttribute("aria-sort"),"descending");
+        await header.locator("button").click();assert.equal(await header.getAttribute("aria-sort"),"ascending");
+        continue;
+      }
       await header.locator("button").click();assert.equal(await header.getAttribute("aria-sort"),"ascending");
       await header.locator("button").click();assert.equal(await header.getAttribute("aria-sort"),"descending");
       await header.locator("button").click();

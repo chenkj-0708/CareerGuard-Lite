@@ -1,5 +1,6 @@
 {
   "analysisVersion": "rq1-single-annotator-v1",
+  "configId": "thesis-positive-evidence-v2",
   "annotationMode": "single",
   "evidenceNotes": "",
   "annotatorId": null,

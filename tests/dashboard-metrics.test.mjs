@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { dashboardMetrics } from "../lib/dashboard-metrics.js";
-import { CONFIG_ID } from "../lib/risk-rules.js";
+import { CONFIG_ID, LEGACY_CONFIG_ID } from "../lib/risk-rules.js";
 
 const row = (id, overrides = {}) => ({
   id, scenarioId: id, createdAt: "2026-11-13T00:00:01Z", configId: CONFIG_ID,
@@ -31,5 +31,8 @@ assert.equal(metrics.excluded.reference_not_blind, 2);
 assert.equal(metrics.skipped.repeats, 2);
 assert.deepEqual([metrics.skipped.forced, metrics.skipped.warmup, metrics.skipped.unidentified, metrics.skipped.invalid_time], [1, 1, 1, 1]);
 assert.equal(dashboardMetrics([]).models.multiSignal.agreement, null);
+assert.equal(dashboardMetrics([row("rerun", { configId: LEGACY_CONFIG_ID }), row("rerun", {
+  createdAt: "2026-11-13T00:00:02Z"
+})]).included_cases, 1);
 assert.deepEqual(dashboardMetrics([...records].reverse(), [{ scenarioId: "failed", id: "failed-first", createdAt: "2026-11-13T00:00:00Z" }]), metrics);
 console.log("case-level reference agreement, shared denominator, exclusions and retry ordering passed");

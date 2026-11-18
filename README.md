@@ -1,6 +1,6 @@
 # CareerGuard Lite 0.2.0
 
-This implementation follows the local scoring contracts in `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`, Chapters 3 and 4. The RQ1 annotation design was amended to a single-researcher exploratory study on 2026-11-13; it is not the original dual-annotator protocol. It is an advisory research prototype, not a calibrated fraud classifier. The backend provides hash-only, read-only duplicate corroboration.
+The local rule inventory follows Chapters 3 and 4 of `../FYP Thesis/RSW_ChenKaiJian_FullText.pdf`. The active scoring configuration revises the thesis's original fusion formula based on development observations. The RQ1 annotation design is a single-researcher exploratory study. The prototype provides advisory risk tiers and hash-only, read-only duplicate corroboration.
 
 ## Run
 
@@ -28,9 +28,9 @@ Each Table 4.7 rule contributes at most once. Text evidence starts at zero and h
 
 - `S_text = round(5 + 95 * min(E_text, 101) / 101)`
 - `S_meta = round(5 + 95 * min(E_meta, 49) / 49)`
-- `S_local = round(0.50 * S_text + 0.50 * S_meta)`
+- `S_local = round(S_text + (100 - S_text) * (S_meta - 5) / 95)`
 
-There is no shared-signal bonus. The display floor of 5 is not risk evidence. Tiers are low below 30, uncertain from 30 to below 60, and elevated from 60. Text scoring uses only title/company/visible text; metadata uses only the declared non-prose fields.
+Under `thesis-positive-evidence-v2`, a metadata score of 5 leaves the text score intact. Scored metadata cues raise the result by a fraction of the remaining distance to 100. Two weak cues can move a listing into a higher tier and should be checked for false positives during evaluation. Tiers are low below 30, uncertain from 30 to below 60, and elevated from 60. Text scoring uses only title/company/visible text; metadata uses only the declared non-prose fields.
 
 Metadata scored weights are HTTP 10, shortened application link 25, public email provider 8 and eight distinct external registrable domains 6. External application domains and messaging are zero-point context. Short descriptions and low extraction coverage are zero-point uncertainty. TXT_OFFPLATFORM suppresses the correlated META_MESSAGING display, and no experience required is not a screening trigger. Generic pay/payment does not trigger advance-fee scoring.
 
@@ -81,9 +81,9 @@ The **Test pages and human answers** form collects `overlapCategory` as well as 
 
 Single mode reports inter-rater reliability as not applicable and uses `Exploratory Improvement` / `No Exploratory Improvement` rather than the original `Supported` verdict. Missing experimental gates still produce `Inconclusive`. Claims concern agreement with one researcher's references, not independent fraud validity. Contracts without `annotationMode` retain the legacy dual mode, which requires complete two-label coverage and reference reliability; old studies are not silently reinterpreted.
 
-The runner selects text-only or metadata-only by validation group-averaged MAOE. It compares the fixed branch with 50/50 fusion on held-out groups, weights each independent group equally, and reports the paired delta, group bootstrap, corrections/worsenings, LOWER-OVERLAP and other strata, class metrics, macro F1, confusion matrices, weighted/unweighted kappa, branch floor/saturation distributions and reference agreement.
+The runner selects text-only or metadata-only by validation group-averaged MAOE. It compares the fixed branch with the fusion method identified by the analysis contract's `configId` on held-out groups. Each independent group receives equal weight. The report includes the paired delta, group bootstrap, corrections/worsenings, LOWER-OVERLAP and other strata, class metrics, macro F1, confusion matrices, weighted/unweighted kappa, branch floor/saturation distributions and reference agreement. Contracts created before configuration binding continue to use the original 50/50 records.
 
-Predeclared sensitivity outputs include prior 58/42 weights, raw-evidence branch scaling, and 25/55 and 35/65 boundaries. The raw scaling (`min(100, 5 + E_branch)`) and text-only validation tie break are explicit implementation defaults because the thesis names these contracts without supplying those exact choices; they must be sealed before held-out access. Required lower-overlap group/class floors remain unset in the template and must be prospectively justified, never filled from outcomes.
+The revised configuration exports sensitivity results for a 25% reduction in the metadata contribution, raw-evidence branch scaling (`min(100, 5 + E_branch)`), and 25/55 and 35/65 tier boundaries. The original configuration uses 58/42 weights for its weight sensitivity. Document the revised method and its sensitivities in the thesis and seal the protocol before held-out access. Set and justify the lower-overlap support floors before collecting those results.
 
 Cross-split groups and conflicting technical repeats are rejected. Synthetic/forced runs and reference-insufficient/failure cases do not enter class-dependent RQ1 metrics. Technical repeats are deduplicated by scenario identity. Missing prospective gates, insufficient independent/class/lower-overlap support, incomplete annotation provenance, low reference reliability in dual mode or directional sensitivity reversal produce Inconclusive. No bootstrap resample count is treated as additional independent information. Ranking metrics are not formal browser outcomes. Existing exports from earlier configurations are retained but excluded from formal RQ1.
 
