@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
-let listener, page, stored={}, requests=[], mode="success", notifications=[];
+let listener, connect, page, stored={}, requests=[], mode="success", notifications=[];
+let activeTabId=1, timingRead=0, timingBehavior=null;
+let readerAvailable=false, injections=0, timingWrites=[];
 globalThis.chrome={ sidePanel:{async setPanelBehavior(){}},
- tabs:{async query(){return [{id:1,url:"https://example.com/job"}]},async sendMessage(){return {ok:true,page}}},
- scripting:{async executeScript(){}},storage:{local:{async get(){return stored},async set(value){Object.assign(stored,value)}}},
- runtime:{onInstalled:{addListener(){}},onMessage:{addListener(fn){listener=fn}},async sendMessage(message){notifications.push(message)}} };
+ tabs:{async query(){return [{id:activeTabId,url:"https://example.com/job"}]},async sendMessage(){
+   if (!readerAvailable) throw new Error("Could not establish connection. Receiving end does not exist.");
+   if (timingBehavior) {
+     timingRead++;
+     if (timingBehavior==="fail" && timingRead===4) return {ok:false};
+     if (timingBehavior==="switch") activeTabId=2;
+   }
+   return {ok:true,page};
+ }},
+ scripting:{async executeScript(){injections++;readerAvailable=true;}},
+ storage:{local:{async get(){return stored},async set(value){
+   if (timingBehavior) timingWrites.push(Object.keys(value));
+   Object.assign(stored,value);
+ }}},
+ runtime:{getManifest(){return {version:"0.2.0"}},onInstalled:{addListener(){}},onConnect:{addListener(fn){connect=fn}},onMessage:{addListener(fn){listener=fn}},async sendMessage(message){notifications.push(message)}} };
 globalThis.fetch=async(url,options)=>{
  if(mode==="offline")throw new Error("offline");
  if(mode==="timeout")return new Promise(()=>{});
@@ -46,4 +60,55 @@ assert.equal(registered.record.split,"test");assert.equal(registered.record.grou
 assert.equal(registered.record.baselines.multiSignal.score,low.record.baselines.multiSignal.score);
 assert.equal((await scan({scenarioId:"CG-WRONG"})).ok,false);
 assert.equal(stored.extractionFailures.at(-1).failureCode,"CASE_MISMATCH");
+const measure=(caseId="CG-001")=>new Promise(resolve=>{
+  let start;
+  const events=[];
+  connect({
+    name:"careerguard-speed",
+    onDisconnect:{addListener(){}},
+    onMessage:{addListener(fn){start=fn;}},
+    postMessage(message){
+      events.push(message);
+      if (message.type==="complete" || message.type==="error") resolve({...message,events});
+    }
+  });
+  start({type:"start",caseId});
+});
+page={...base,url:"https://example.com/job"};
+const requestsBeforeBatch=requests.length;
+const lastScanBeforeBatch=stored.lastScan;
+timingBehavior="fail";
+const pendingBatch=measure();
+assert.equal((await scan()).ok,false);
+const batch=await pendingBatch;
+assert.equal(batch.type,"complete");
+assert.equal(batch.events[0].type,"ready");
+assert.deepEqual(batch.events.filter(e=>e.type==="progress").map(e=>e.run),
+  Array.from({length:12},(_,index)=>index+1));
+assert.equal(batch.summary.measured,10);
+assert.equal(batch.summary.succeeded,9);
+assert.equal(injections,1);
+assert.equal(timingWrites.filter(keys=>keys.includes("scanLogs")).length,11);
+assert.ok(!timingWrites.some(keys=>keys.includes("testCases")));
+assert.equal(requests.length,requestsBeforeBatch);
+assert.equal(stored.lastScan,lastScanBeforeBatch);
+const batchRecords=stored.scanLogs.filter(r=>r.timingBatchId===batch.summary.batchId);
+assert.equal(batchRecords.filter(r=>r.timingPhase==="warmup").length,2);
+assert.equal(batchRecords.filter(r=>r.timingPhase==="measured").length,9);
+assert.ok(batchRecords.every(r=>r.localEndToEndLatencyMs>=r.localScoringLatencyMs && !r.escalation.attempted));
+assert.equal(stored.extractionFailures.at(-1).timingBatchId,batch.summary.batchId);
+assert.equal(stored.extractionFailures.at(-1).timingRun,4);
+timingBehavior="switch";
+const stopped=await measure();
+assert.match(stopped.summary.stopped,/active listing changed/);
+assert.equal(stopped.summary.measured,0);
+assert.equal(stored.extractionFailures.at(-1).failureCode,"TIMING_PAGE_CHANGED");
+const badCase=await measure("UNKNOWN");
+assert.equal(badCase.type,"error");
+assert.match(badCase.error,/not registered/);
+readerAvailable=false;
+activeTabId=1;
+timingBehavior=null;
+assert.equal((await scan({autoEscalate:false})).ok,true);
+assert.equal(injections,2);
 console.log("hash-only workflow, 2-second deadline, safe failure and eligibility tests passed");

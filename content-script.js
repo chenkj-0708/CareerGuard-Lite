@@ -213,7 +213,7 @@
   }
 
   const listener = (message, _sender, sendResponse) => {
-    if (message.type !== "CG_EXTRACT") return;
+    if (message.type !== "CG_EXTRACT_CURRENT" && message.type !== "CG_EXTRACT") return;
     extractWhenReady(message.waitForContent !== false)
       .then(page => sendResponse({ ok: true, page }))
       .catch(() => sendResponse({ ok: false, error: "The listing could not be extracted." }));

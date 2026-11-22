@@ -73,5 +73,6 @@ def scan_statistics(records, failures):
                     failure=timing(failed, lambda r:r.get('totalLatencyMs')),
                     extraction=timing(rows, lambda r:r.get('page', {}).get('extractionLatencyMs', r.get('extractionLatencyMs'))),
                     local=timing(successes, lambda r:r.get('localScoringLatencyMs')),
+                    localEndToEnd=timing([r for r in successes if r.get('timingBatchId')], lambda r:r.get('localEndToEndLatencyMs')),
                     backend=timing([r for r in rows if r.get('escalation', {}).get('attempted')], lambda r:r.get('escalation', {}).get('clientLatencyMs'))),
         counting_rule='First measured attempt per scenario determines success; repeated timings are reduced to one median per scenario before median/p95. Forced runs and marked warm-ups excluded. Legacy scenario IDs are not reconstructed.')

@@ -125,6 +125,8 @@ def evaluate_rq1(records,contract=None,resamples=10000):
             exclusions["functional_or_synthetic"]+=1; continue
         if row.get("timingPhase") == "warmup":
             exclusions["warmup"]+=1; continue
+        if row.get("timingBatchId"):
+            exclusions["timing_repeat"]+=1; continue
         if row.get("groundTruth") not in GRADE:
             exclusions["reference_insufficient_or_unlabelled"]+=1; continue
         if row.get("page",{}).get("pageStatus") in ("unsupported","extraction-limited") or row.get("page",{}).get("extractionStatus") == "unavailable":

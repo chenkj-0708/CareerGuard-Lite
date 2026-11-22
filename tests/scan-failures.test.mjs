@@ -21,6 +21,7 @@ globalThis.chrome = {
     if(failureMode==="no-tab")return [];
     return [{id:1,url:failureMode==="unsupported"?"chrome-error://chromewebdata/":"https://example.com/job"}];
   },async sendMessage(){
+    if(failureMode==="injection")throw new Error("Could not establish connection. Receiving end does not exist.");
     if(failureMode==="message")throw privateError();
     if(failureMode==="reader")return {ok:false,error:privateError().message};
     if(failureMode==="invalid")return {ok:true,page:{schemaVersion:99}};
@@ -37,7 +38,7 @@ globalThis.chrome = {
     if(failureMode==="save" && value.scanLogs?.length && !saveRejected){saveRejected=true;throw privateError();}
     Object.assign(stored,structuredClone(value));
   }}},
-  runtime:{onInstalled:{addListener(){}},onMessage:{addListener(fn){listener=fn}},async sendMessage(){}}
+  runtime:{onInstalled:{addListener(){}},onConnect:{addListener(){}},onMessage:{addListener(fn){listener=fn}},async sendMessage(){}}
 };
 await import("../background.js");
 await new Promise(resolve=>setTimeout(resolve,0));

@@ -43,6 +43,7 @@ function explanationHtml(record, result) {
 
 async function scan() {
   elements.scan.disabled = true;
+  elements.measureSpeed.disabled = true;
   elements.status.textContent = "Reading and assessing this page…";
   elements.result.hidden = true;
   const options = { mode: "multiSignal", showReasons: true, autoEscalate: true };
@@ -51,13 +52,76 @@ async function scan() {
   let response;
   try { response = await chrome.runtime.sendMessage({ type: "CG_SCAN", options }); }
   catch (error) { response = { ok: false, error: error.message }; }
-  finally { elements.scan.disabled = false; }
+  finally { elements.scan.disabled = elements.measureSpeed.disabled = false; }
   if (!response?.ok) {
     elements.status.textContent = response?.error || "The page could not be scanned.";
     return;
   }
   elements.status.textContent = "Scan complete";
   render(response.record);
+}
+
+async function measureSpeed() {
+  elements.scan.disabled = elements.measureSpeed.disabled = elements.caseId.disabled = true;
+  elements.status.textContent = "Measuring speed… Keep this listing open.";
+  try {
+    const caseId = elements.caseId.value.trim() || undefined;
+    const { measured, succeeded, warmupFailures, stopped } = await requestTimingBatch(caseId);
+    const counts = `${succeeded}/${measured} measured scans succeeded. ${warmupFailures} warm-up failures.`;
+    elements.status.textContent = stopped
+      ? `Timing stopped. ${stopped} ${counts}`
+      : `Timing complete. ${counts} Results are available in Dashboard → Export JSON.`;
+  } catch (error) {
+    elements.status.textContent = error.message;
+  } finally {
+    elements.scan.disabled = elements.measureSpeed.disabled = elements.caseId.disabled = false;
+  }
+}
+
+function requestTimingBatch(caseId) {
+  const reconnectHint = "Reload CareerGuard Lite in chrome://extensions, then reopen the side panel.";
+  return new Promise((resolve, reject) => {
+    let port;
+    try {
+      port = chrome.runtime.connect({ name: "careerguard-speed" });
+    } catch {
+      reject(new Error(reconnectHint));
+      return;
+    }
+    const startup = setTimeout(() => {
+      port.disconnect();
+      reject(new Error(`The background worker did not respond. ${reconnectHint}`));
+    }, 5000);
+    let acknowledged = false;
+    port.onDisconnect.addListener(() => {
+      clearTimeout(startup);
+      // Reading lastError here consumes Chrome's disconnect error.
+      const lastError = chrome.runtime.lastError;
+      const message = acknowledged
+        ? "The timing connection closed. Check the Dashboard export for any scans already saved."
+        : `The timing worker is unavailable. ${reconnectHint}`;
+      reject(new Error(message, { cause: lastError }));
+    });
+    port.onMessage.addListener(message => {
+      clearTimeout(startup);
+      if (message.type === "ready") acknowledged = true;
+      if (message.type === "progress") {
+        elements.status.textContent = `Measuring speed… Run ${message.run}/${message.total}. Keep this listing open.`;
+      }
+      if (message.type === "complete" || message.type === "error") {
+        if (message.type === "complete") resolve(message.summary);
+        else reject(new Error(message.error));
+        port.disconnect();
+      }
+    });
+    try {
+      port.postMessage({ type: "start", caseId });
+    } catch {
+      clearTimeout(startup);
+      port.disconnect();
+      reject(new Error(reconnectHint));
+    }
+  });
 }
 
 function escapeHtml(value) {
@@ -67,10 +131,11 @@ function escapeHtml(value) {
 }
 
 elements.scan.addEventListener("click", scan);
+elements.measureSpeed.addEventListener("click", measureSpeed);
 elements.dashboard.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
 chrome.runtime.onMessage.addListener(message => {
-  if (message.type === "CG_LOCAL_RESULT" && elements.scan.disabled) {
+  if (message.type === "CG_LOCAL_RESULT" && elements.scan.disabled && !elements.caseId.disabled) {
     render(message.record);
     elements.status.textContent = "Local result ready; backend lookup in progress.";
   }
