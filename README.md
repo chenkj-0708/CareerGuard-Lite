@@ -30,7 +30,7 @@ Each Table 4.7 rule contributes at most once. Text evidence starts at zero and h
 - `S_meta = round(5 + 95 * min(E_meta, 49) / 49)`
 - `S_local = round(S_text + (100 - S_text) * (S_meta - 5) / 95)`
 
-Under `thesis-positive-evidence-v2`, a metadata score of 5 leaves the text score intact. Scored metadata cues raise the result by a fraction of the remaining distance to 100. Two weak cues can move a listing into a higher tier and should be checked for false positives during evaluation. Tiers are low below 30, uncertain from 30 to below 60, and elevated from 60. Text scoring uses only title/company/visible text; metadata uses only the declared non-prose fields.
+Under `thesis-contextual-fusion-v3`, scored metadata cues raise the text score by a fraction of the remaining distance to 100. When urgency and a cross-domain application destination co-occur, fusion also computes a review score capped at 40 and keeps the higher score. A cross-domain application can be legitimate and does not add points on its own. Tiers are low below 30, uncertain from 30 to below 60, and elevated from 60. The text-only and metadata-only scoring rules are unchanged from `thesis-positive-evidence-v2`.
 
 Metadata scored weights are HTTP 10, shortened application link 25, public email provider 8 and eight distinct external registrable domains 6. External application domains and messaging are zero-point context. Short descriptions and low extraction coverage are zero-point uncertainty. TXT_OFFPLATFORM suppresses the correlated META_MESSAGING display, and no experience required is not a screening trigger. Generic pay/payment does not trigger advance-fee scoring.
 

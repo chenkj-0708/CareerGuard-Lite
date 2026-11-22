@@ -12,6 +12,8 @@ GRADE = {"low": 0, "uncertain": 1, "elevated": 2}
 SENSITIVITIES = ("rawScaling", "lowerBoundaries", "upperBoundaries")
 LEGACY_CONFIG_ID = "thesis-primary-50-50-v1"
 POSITIVE_EVIDENCE_CONFIG_ID = "thesis-positive-evidence-v2"
+CONTEXTUAL_FUSION_CONFIG_ID = "thesis-contextual-fusion-v3"
+CONTACT_FUSION_CONFIG_ID = "thesis-contact-fusion-v4"
 
 def reference_checks(rows, contract, mode):
     """Check every included reference; never estimate reliability from a subset."""
@@ -113,7 +115,7 @@ def evaluate_rq1(records,contract=None,resamples=10000):
     contract=contract or {}; exclusions=defaultdict(int); eligible=[]; seen={}; problems=[]
     mode = contract.get("annotationMode", "dual")
     config_id = contract.get("configId", LEGACY_CONFIG_ID)
-    if config_id not in (LEGACY_CONFIG_ID, POSITIVE_EVIDENCE_CONFIG_ID):
+    if config_id not in (LEGACY_CONFIG_ID, POSITIVE_EVIDENCE_CONFIG_ID, CONTEXTUAL_FUSION_CONFIG_ID, CONTACT_FUSION_CONFIG_ID):
         problems.append("unknown_scoring_configuration")
     version = "rq1-single-annotator-v1" if mode == "single" else "rq1-thesis-v1"
     if mode not in ("single", "dual"):
@@ -167,7 +169,7 @@ def evaluate_rq1(records,contract=None,resamples=10000):
     lower_result=compare(lower,single,resamples=resamples)
     strata={category:compare([r for r in test if r["overlapCategory"]==category],single,resamples=resamples) for category in ("DIRECT","RELATED","LOWER-OVERLAP")}
     sensitivity={}
-    weight_sensitivity = "reducedMetadata" if config_id == POSITIVE_EVIDENCE_CONFIG_ID else "priorWeight"
+    weight_sensitivity = "priorWeight" if config_id == LEGACY_CONFIG_ID else "reducedMetadata"
     sensitivity_keys = (weight_sensitivity, *SENSITIVITIES)
     for key in sensitivity_keys:
         if all(r.get("baselines",{}).get("sensitivities",{}).get(key,{}).get("tier") in GRADE for r in test):
