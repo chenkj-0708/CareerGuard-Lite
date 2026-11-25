@@ -1,16 +1,12 @@
-import { combineBackend, scoreAll } from "./lib/scoring.js";
+import { scoreAll } from "./lib/scoring.js";
 import { CONFIG_ID } from "./lib/risk-rules.js";
-import { BACKEND_URL } from "./lib/backend-client.js";
 import { canonicalScenarioUrl, scenarioIdForUrl } from "./lib/scan-statistics.js";
 import { matchTestCase, TestCaseIdentificationError } from "./lib/test-cases.js";
 import { validatePageSignal, PageSignalValidationError } from "./lib/page-signal.js";
-import { excerptHash, HASH_CONTRACT_VERSION } from "./lib/hash-contract.js";
 
 const DEFAULTS = {
   mode: "multiSignal",
-  showReasons: true,
-  autoEscalate: true,
-  backendUrl: BACKEND_URL
+  showReasons: true
 };
 
 const storageGet = (keys) => chrome.storage.local.get(keys);
@@ -36,7 +32,6 @@ async function ensureContentScript(tabId) {
   await chrome.scripting.executeScript({ target: { tabId }, files: ["lib/public-suffix.js", "content-script.js"] });
 }
 
-export const BACKEND_TIMEOUT_MS = 2000;
 const TIMING_READ_TIMEOUT_MS = 5000;
 const WARMUP_RUNS = 2;
 const MEASURED_RUNS = 10;
@@ -72,39 +67,6 @@ async function readListing(tabId, attempt, timing) {
     clearTimeout(timer);
   }
 }
-async function backendVerify(page, localResult, backendUrl) {
-  if (backendUrl !== DEFAULTS.backendUrl) throw new Error("Only the configured localhost verifier is allowed.");
-  const controller = new AbortController();
-  let timer;
-  const deadline = new Promise((resolve, reject) => {
-    timer = setTimeout(() => { controller.abort(); reject(new Error("Corroboration timeout.")); }, BACKEND_TIMEOUT_MS);
-  });
-  const started = performance.now();
-  const task = (async () => {
-    // One deadline covers hashing, token acquisition, request and response decoding.
-    const hash = await excerptHash(page.visibleText);
-    if (controller.signal.aborted) throw new Error("Corroboration timeout.");
-    const health = await fetch(`${backendUrl}/health`, { signal: controller.signal });
-    if (!health.ok) throw new Error("Backend unavailable.");
-    const { token } = await health.json();
-    const requestId = crypto.randomUUID();
-    const response = await fetch(`${backendUrl}/verify`, {
-      method: "POST", signal: controller.signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requestId, schemaVersion: 1,
-        scenarioOrScanId: page.scanId || crypto.randomUUID(), excerptHash: hash,
-        hashContractVersion: HASH_CONTRACT_VERSION, capabilityToken: token })
-    });
-    if (!response.ok) throw new Error(`Backend verification failed (${response.status}).`);
-    const result = await response.json();
-    if (controller.signal.aborted || performance.now() - started >= BACKEND_TIMEOUT_MS) throw new Error("Corroboration timeout.");
-    if (result.requestId !== requestId) throw new Error("Mismatched corroboration response.");
-    if (result.status === "unavailable") throw new Error("Corroboration index unavailable.");
-    return result;
-  })();
-  try { return await Promise.race([task, deadline]); } finally { clearTimeout(timer); }
-}
-
 function purgeRecords(records, now = Date.now()) {
   return records.filter(record => {
     const age = now - Date.parse(record.createdAt);
@@ -208,8 +170,6 @@ async function performScan(options, attempt, timing) {
     ...Object.keys(DEFAULTS), "testCases", "rq1HeldOutAccessAt"
   ]);
   const settings = { ...DEFAULTS, ...storedSettings, ...options };
-  // Ignore legacy custom settings: the verifier is restricted to this loopback address.
-  settings.backendUrl = BACKEND_URL;
   attempt.stage = "tab";
   let tab;
   if (timing) {
@@ -269,35 +229,6 @@ async function performScan(options, attempt, timing) {
   const localScoringLatencyMs = Number((performance.now() - scoringStarted).toFixed(2));
   const localEndToEndLatencyMs = Number((performance.now() - started).toFixed(2));
   const selected = baselines[settings.mode] || baselines.multiSignal;
-  let finalResult = selected;
-  let escalation = { attempted: false, status: "not-required" };
-  const fullWorkflowEnabled = settings.forceEscalation || (settings.autoEscalate && settings.mode === "multiSignal");
-  const shouldEscalate = (settings.forceEscalation && settings.evaluationOverride === true) || (fullWorkflowEnabled && ["uncertain", "elevated"].includes(baselines.multiSignal.tier));
-
-  if (shouldEscalate) {
-    const backendStarted = performance.now();
-    const notification = chrome.runtime.sendMessage?.({ type: "CG_LOCAL_RESULT", record: {
-      scenarioId: attempt.scenarioId,
-      page: { pageStatus: page.pageStatus }, displayedResult: selected,
-      escalation: { attempted: true, status: "pending" }, interfaceCondition: settings.showReasons ? "explanation" : "score-only",
-      totalLatencyMs: Number((performance.now() - started).toFixed(2))
-    } });
-    notification?.catch?.(() => {});
-    escalation = { attempted: true, status: "pending" };
-    try {
-      const backend = await backendVerify(page, baselines.multiSignal, settings.backendUrl);
-      finalResult = combineBackend(baselines.multiSignal, backend);
-      escalation = { attempted: true, status: "completed", backendLatencyMs: backend.latencyMs, corroborationIndexVersion: backend.corroborationIndexVersion, runId: backend.runId, duplicateSourceCount: backend.duplicateSourceCount };
-    } catch (error) {
-      escalation = { attempted: true, status: "unavailable", error: error.message === "Corroboration timeout." ? "TIMEOUT" : "CORROBORATION_UNAVAILABLE" };
-    }
-    escalation.clientLatencyMs = Number((performance.now() - backendStarted).toFixed(2));
-  }
-
-  const fullWorkflow = fullWorkflowEnabled
-    ? finalResult.model === "full-workflow" ? finalResult : { ...baselines.multiSignal, model: "full-workflow", backend: null }
-    : null;
-  if (fullWorkflowEnabled) finalResult = fullWorkflow;
   if (timing) {
     const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     assertTimingPage(currentTab, timing);
@@ -332,11 +263,9 @@ async function performScan(options, attempt, timing) {
       }
     },
     baselines: derivedOnly(baselines),
-    fullWorkflow: derivedOnly(fullWorkflow),
     selectedMode: settings.mode,
     interfaceCondition: settings.showReasons ? "explanation" : "score-only",
-    displayedResult: derivedOnly(finalResult),
-    escalation,
+    displayedResult: derivedOnly(selected),
     localScoringLatencyMs,
     localEndToEndLatencyMs,
     ...timingMetadata(timing),
@@ -375,7 +304,7 @@ async function measureSpeed(caseId, reportProgress, isConnected) {
     if (!warmup) summary.measured++;
     try {
       await scan({ scenarioId: testCase.scenarioId, mode: "multiSignal",
-        autoEscalate: false, forceEscalation: false, timingPhase: warmup ? "warmup" : "measured" },
+        timingPhase: warmup ? "warmup" : "measured" },
         { batchId, run, url, tabId: tab.id, testCase });
       if (!warmup) summary.succeeded++;
     } catch (error) {
@@ -430,16 +359,13 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!["CG_SCAN", "CG_ESCALATE"].includes(message.type)) return;
+  if (message.type !== "CG_SCAN") return;
   if (timingInProgress) {
     sendResponse({ ok: false, error: SCAN_BUSY });
     return;
   }
   activeScans++;
-  const options = message.type === "CG_ESCALATE"
-    ? { ...message.options, mode: "multiSignal", forceEscalation: true }
-    : message.options;
-  scan(options).then(record => ({ ok: true, record }), error => ({ ok: false, error: error.message })).then(response => {
+  scan(message.options).then(record => ({ ok: true, record }), error => ({ ok: false, error: error.message })).then(response => {
     activeScans--;
     sendResponse(response);
   });

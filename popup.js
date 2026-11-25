@@ -3,7 +3,6 @@ const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((
 function render(record) {
   const result = record.displayedResult;
   const reasons = explanationHtml(record, result);
-  const backend = backendHtml(record, result);
   elements.result.innerHTML = `
     <div class="result-heading"><span class="eyebrow">LISTING CHECK</span><span class="tier ${result.tier}">${result.tier} concern</span></div>
     <div class="score-row"><span class="score ${result.tier}">${result.score}</span><span class="score-caption">/ 100<br>Concern score</span></div>
@@ -11,22 +10,8 @@ function render(record) {
     <p class="advice">${result.tier === "low" ? "Verify the employer before sharing personal details." : "Pause before applying. Never pay to get a job."}</p>
     <p class="result-caveat">Advisory only. A low score does not guarantee safety.</p>
     ${reasons ? `<div class="evidence"><h3>What we noticed</h3>${reasons}</div>` : ""}
-    <div class="duplicate-context"><h3>Duplicate listing context</h3>${backend}</div>
     <details class="technical-details"><summary>Scan details</summary><p>Content reading completeness: ${Number.isFinite(result.ExtractionSufficiency) ? result.ExtractionSufficiency+"%" : "unknown"} (not prediction accuracy)</p><p>Distance from risk-tier boundary: ${Number.isFinite(result.TierBoundaryDistance) ? result.TierBoundaryDistance+"%" : "unknown"}. A smaller value means the score is closer to a tier boundary. This is not confidence or accuracy.</p><p>${Number.isFinite(record.totalLatencyMs) ? record.totalLatencyMs+" ms" : "Timing not recorded"}</p><p>Verify the employer through an independent official channel before continuing.</p></details>`;
   elements.result.hidden = false;
-}
-
-function backendHtml(record, result) {
-  const status = record.escalation?.status;
-  if (status === "pending") return '<p class="backend-status">Lookup in progress. Local result ready.</p>';
-  if (status === "unavailable") return '<p class="warning backend-status">Backend unavailable. Duplicate context unchecked; local score unchanged.</p>';
-  if (status === "not-required") return '<p class="backend-status">Lookup was not requested.</p>';
-  if (status === "completed") {
-    const context = result.backend?.contextReasons || [];
-    return '<p class="success backend-status">Lookup completed. No effect on score.</p>' +
-      (context.length ? context.map(reason => `<p>${escapeHtml(reason.message)}</p>`).join("") : '<p>No qualifying matches. This does not establish uniqueness or safety.</p>');
-  }
-  return '<p class="backend-status">Lookup status unknown.</p>';
 }
 
 function explanationHtml(record, result) {
@@ -46,7 +31,7 @@ async function scan() {
   elements.measureSpeed.disabled = true;
   elements.status.textContent = "Reading and assessing this page…";
   elements.result.hidden = true;
-  const options = { mode: "multiSignal", showReasons: true, autoEscalate: true };
+  const options = { mode: "multiSignal", showReasons: true };
   const caseId=elements.caseId.value.trim();
   if(caseId)options.scenarioId=caseId;
   let response;
@@ -133,10 +118,3 @@ function escapeHtml(value) {
 elements.scan.addEventListener("click", scan);
 elements.measureSpeed.addEventListener("click", measureSpeed);
 elements.dashboard.addEventListener("click", () => chrome.runtime.openOptionsPage());
-
-chrome.runtime.onMessage.addListener(message => {
-  if (message.type === "CG_LOCAL_RESULT" && elements.scan.disabled && !elements.caseId.disabled) {
-    render(message.record);
-    elements.status.textContent = "Local result ready; backend lookup in progress.";
-  }
-});

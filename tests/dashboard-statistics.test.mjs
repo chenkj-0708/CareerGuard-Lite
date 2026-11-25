@@ -8,7 +8,7 @@ try {
   const page=await browser.newPage();
   await page.route("https://extension.test/**",route=>{
     const path=new URL(route.request().url()).pathname.slice(1);
-    if(!["dashboard.html","dashboard.css","dashboard.js","lib/scan-statistics.js","lib/test-cases.js","lib/dashboard-metrics.js","lib/backend-client.js","lib/risk-rules.js","lib/research-protocol.js"].includes(path))return route.abort();
+    if(!["dashboard.html","dashboard.css","dashboard.js","lib/scan-statistics.js","lib/test-cases.js","lib/dashboard-metrics.js","lib/risk-rules.js","lib/research-protocol.js"].includes(path))return route.abort();
     route.fulfill({body:fs.readFileSync(new URL(`../${path}`,import.meta.url)),contentType:path.endsWith(".js")?"text/javascript":path.endsWith(".css")?"text/css":"text/html"});
   });
   await page.addInitScript(()=>{
@@ -46,22 +46,10 @@ try {
   const text=await page.locator("#scanSummary").innerText();
   assert.ok(text.includes("1 successful")&&text.includes("1 failed"));
   assert.ok(text.includes("100.0 ms")&&text.includes("800.0 ms"));
-  assert.equal(await page.locator("#backendUrl").getAttribute("readonly"), "");
+  assert.equal(await page.locator("#connection").count(), 0);
   assert.equal(await page.locator("#saveSettings").count(), 0);
   assert.ok((await page.locator("#summary").innerText()).includes("Human-reference agreement (descriptive)"));
   assert.ok((await page.locator("#records .selected-score").innerText()).includes("5 · Low ✓"));
-  await page.locator("#connection > summary").click();
-  let healthMode = "no-index";
-  await page.route("http://127.0.0.1:8765/health", async route => {
-    if (healthMode === "timeout") return;
-    await route.fulfill({ json: healthMode === "legacy" ? { ok:true } : { ok:true, indexAvailable:healthMode === "ready" } });
-  });
-  for (const [mode, expected] of [["no-index", "Index: not configured"], ["ready", "Index: available"], ["legacy", "Index: unknown"], ["timeout", "timed out"]]) {
-    healthMode = mode;
-    await page.click("#health");
-    await page.waitForFunction(() => !document.getElementById("health").disabled);
-    assert.ok((await page.locator("#healthStatus").innerText()).includes(expected));
-  }
   page.on("dialog",dialog=>dialog.accept());
   await page.click("#clear");
   await page.waitForFunction(()=>document.getElementById("scanSummary").textContent.includes("0 distinct page cases"));
@@ -148,12 +136,12 @@ try {
   assert.equal(await page.locator('#historyTableControls [data-page="next"]').isDisabled(),true);
   await page.evaluate(()=>{
     document.documentElement.style.scrollBehavior="auto";
-    for(const id of ["protocol","cases","history","connection"]){
+    for(const id of ["protocol","cases","history"]){
       const section=document.getElementById(id);if(section.tagName==="DETAILS")section.open=true;
       section.style.minHeight="900px";
     }
   });
-  for(const id of ["overview","protocol","cases","history","connection"]){
+  for(const id of ["overview","protocol","cases","history"]){
     await page.evaluate(id=>{const section=document.getElementById(id);window.scrollTo(0,window.scrollY+section.getBoundingClientRect().top-75);},id);
     await page.waitForFunction(id=>document.querySelector("nav a.active")?.hash===`#${id}`,id);
     assert.equal(await page.locator(`nav a[href="#${id}"]`).getAttribute("aria-current"),"location");

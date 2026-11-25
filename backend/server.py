@@ -102,6 +102,9 @@ class Handler(BaseHTTPRequestHandler):
                     "indexAvailable": self.server.engine.entries is not None})
 
     def do_POST(self):
+        if self.path == "/health":
+            self.do_GET()
+            return
         if not self.gate():
             return
         if self.path != "/verify":

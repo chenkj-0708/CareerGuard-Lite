@@ -1,9 +1,8 @@
 import { scanStatistics } from "./lib/scan-statistics.js";
 import { validateTestCases, updateReferenceRationale } from "./lib/test-cases.js";
 import { dashboardMetrics, METRIC_EXCLUSIONS } from "./lib/dashboard-metrics.js";
-import { BACKEND_URL, checkBackendHealth } from "./lib/backend-client.js";
 import { defaultResearchContract, validateResearchContract, sealResearchContract, heldOutAccessTime, buildResearchExport } from "./lib/research-protocol.js";
-const ids = ["backendUrl", "health", "healthStatus", "summary", "metricsNote", "scanSummary", "records", "exportJson", "exportCsv", "clear", "caseForm", "testId", "testUrl", "testLabel", "testRationale", "testGroup", "testSplit", "testOverlap", "testRefreshReference", "caseStatus", "testCases", "newCase", "researchForm", "researchFields", "researchAnnotator", "researchRubric", "researchTie", "researchMinGroups", "researchMinClass", "researchPairs", "researchPrecision", "researchConformance", "researchLeakage", "researchTaxonomy", "researchEvidence", "saveResearch", "sealResearch", "reviseResearch", "researchStatus", "researchReadiness"];
+const ids = ["summary", "metricsNote", "scanSummary", "records", "exportJson", "exportCsv", "clear", "caseForm", "testId", "testUrl", "testLabel", "testRationale", "testGroup", "testSplit", "testOverlap", "testRefreshReference", "caseStatus", "testCases", "newCase", "researchForm", "researchFields", "researchAnnotator", "researchRubric", "researchTie", "researchMinGroups", "researchMinClass", "researchPairs", "researchPrecision", "researchConformance", "researchLeakage", "researchTaxonomy", "researchEvidence", "saveResearch", "sealResearch", "reviseResearch", "researchStatus", "researchReadiness"];
 const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 let logs = [];
 let extractionFailures = [];
@@ -37,10 +36,6 @@ function scoreCell(result, primary = false) {
   return `<td${primary ? ' class="selected-score"' : ""}>${Number.isFinite(result?.score) ? result.score : "—"} · ${tiers[result?.tier] || "Unknown"}${primary ? " ✓" : ""}</td>`;
 }
 
-function backendStatus(record) {
-  const labels = { "not-required": "Not requested", pending: "Pending", completed: "Completed", unavailable: "Unavailable" };
-  return labels[record.escalation?.status] || "Unknown";
-}
 
 const tableStates = new Map();
 function render() {
@@ -62,12 +57,6 @@ function render() {
   }).join("");
   const reasons = Object.entries(metrics.excluded).map(([key,count]) => `${METRIC_EXCLUSIONS[key]}: ${count}`).join("; ");
   el.metricsNote.textContent = `All three methods use the same eligible cases and each case's first retained measured attempt. ${metrics.skipped.repeats} repeat records are not counted again. Skipped records: ${metrics.skipped.forced} forced/synthetic, ${metrics.skipped.warmup} warm-ups, ${metrics.skipped.unidentified} without a case ID, and ${metrics.skipped.invalid_time} without a valid timestamp. ${reasons ? "Exclusions: "+reasons+". " : ""}This is not a formal RQ1 verdict or a measure of real-world fraud detection accuracy.`;
-  const backendCounts = logs.reduce((counts, record) => {
-    const status = backendStatus(record);
-    counts[status] = (counts[status] || 0) + 1;
-    return counts;
-  }, {});
-  el.summary.innerHTML += `<article class="card"><span>Backend status</span><strong>${backendCounts.Completed || 0} completed</strong><small>${backendCounts.Unavailable || 0} unavailable · ${backendCounts.Pending || 0} pending · ${backendCounts["Not requested"] || 0} not requested · ${backendCounts.Unknown || 0} unknown</small></article>`;
   el.records.innerHTML = [...logs].map((record) => {
     const counts = record.page.signalCounts;
     const signalSummary = counts
@@ -78,8 +67,8 @@ function render() {
       ${scoreCell(record.baselines?.textOnly)}
       ${scoreCell(record.baselines?.metadataOnly)}
       ${scoreCell(record.baselines?.multiSignal, true)}
-      <td>${backendStatus(record)}</td><td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${Number.isFinite(record.totalLatencyMs) ? record.totalLatencyMs+" ms" : "—"}</td><td><button type="button" class="danger" data-delete-scan="${escapeHtml(record.id)}" ${record.id?"":"disabled"}>Delete</button></td></tr>`;
-  }).join("") || `<tr><td colspan="11" class="muted">No scans recorded yet.</td></tr>`;
+      <td>${signalSummary}</td><td>${record.groundTruth || "—"}</td><td>${Number.isFinite(record.totalLatencyMs) ? record.totalLatencyMs+" ms" : "—"}</td><td><button type="button" class="danger" data-delete-scan="${escapeHtml(record.id)}" ${record.id?"":"disabled"}>Delete</button></td></tr>`;
+  }).join("") || `<tr><td colspan="10" class="muted">No scans recorded yet.</td></tr>`;
   enhanceTable(el.testCases.querySelector("table"), "cases", 0);
   enhanceTable(el.records.closest("table"), "history", 1);
 }
@@ -172,7 +161,7 @@ async function load() {
   extractionFailures=researchExport?.extractionFailures??stored.extractionFailures??[];
   analysisContract=researchExport?.analysisContract??{...defaultResearchContract(),...stored.analysisContract};
   el.exportJson.disabled=el.exportCsv.disabled=!!pairingError;
-  el.backendUrl.value=BACKEND_URL;render();scheduleNavigationUpdate();
+  render();scheduleNavigationUpdate();
   if(pairingError){
     el.researchReadiness.textContent=`Research export unavailable: ${pairingError.message}`;
     el.summary.innerHTML="";
@@ -246,20 +235,11 @@ el.testCases.addEventListener("click",async event=>{
   el.testLabel.focus({preventScroll:true});
   el.caseForm.scrollIntoView({block:"start"});
 });
-el.health.addEventListener("click",async()=>{
-  el.health.disabled=true;el.healthStatus.textContent="Service: checking · Index: checking";
-  try {
-    const result=await checkBackendHealth();
-    const service={connected:"connected",timeout:"timed out (2 seconds)",unavailable:"unavailable or invalid response"};
-    const index={available:"available",unavailable:"not configured",unknown:"unknown"};
-    el.healthStatus.textContent=`Service: ${service[result.service]} · Index: ${index[result.index]}`;
-  } finally { el.health.disabled=false; }
-});
 el.exportJson.addEventListener("click",async()=>{
   try {const pairingError=await load();if(pairingError)throw pairingError;download("careerguard-evaluation.json",JSON.stringify({...researchExport,rq2Summary:scanStatistics(logs,extractionFailures)},null,2),"application/json");}
   catch(error){el.caseStatus.textContent=`Cannot export research data: ${error.message}`;}
 });
-el.exportCsv.addEventListener("click",()=>{const header=["id","created_at","url","page_status","selected_mode","text_score","text_tier","metadata_score","metadata_tier","multi_score","multi_tier","full_score","full_tier","ground_truth","interface_condition","participant_decision","actionability","decision_time_ms","local_scoring_latency_ms","total_latency_ms","escalation_status","scenario_id","group_id","split","overlap_category","config_id","extraction_status_code","root_source","text_evidence","metadata_evidence","annotator_id","annotation_protocol_version","reference_labelled_at","reference_before_prediction","reference_rationale","rationale_recorded_at","rationale_before_prediction"];const rows=logs.map(r=>[r.id,r.createdAt,r.page.url,r.page.pageStatus,r.selectedMode,r.baselines.textOnly.score,r.baselines.textOnly.tier,r.baselines.metadataOnly.score,r.baselines.metadataOnly.tier,r.baselines.multiSignal.score,r.baselines.multiSignal.tier,r.fullWorkflow?.score,r.fullWorkflow?.tier,r.groundTruth,r.interfaceCondition,r.participantResponse?.decision,r.participantResponse?.actionability,r.participantResponse?.decisionTimeMs,r.localScoringLatencyMs,r.totalLatencyMs,r.escalation.status,r.scenarioId,r.groupId,r.split,r.overlapCategory,r.configId,r.page.extractionStatusCode,r.page.rootSource,r.baselines.textOnly.evidenceSum,r.baselines.metadataOnly.evidenceSum,r.annotatorId,r.annotationProtocolVersion,r.reference?.labelledAt,r.reference?.recordedBeforePrediction,r.reference?.rationale,r.reference?.rationaleRecordedAt,r.reference?.rationaleRecordedBeforePrediction]);download("careerguard-evaluation.csv",[header,...rows].map(row=>row.map(csvCell).join(",")).join("\n"),"text/csv");});
+el.exportCsv.addEventListener("click",()=>{const header=["id","created_at","url","page_status","selected_mode","text_score","text_tier","metadata_score","metadata_tier","multi_score","multi_tier","ground_truth","interface_condition","participant_decision","actionability","decision_time_ms","local_scoring_latency_ms","total_latency_ms","scenario_id","group_id","split","overlap_category","config_id","extraction_status_code","root_source","text_evidence","metadata_evidence","annotator_id","annotation_protocol_version","reference_labelled_at","reference_before_prediction","reference_rationale","rationale_recorded_at","rationale_before_prediction"];const rows=logs.map(r=>[r.id,r.createdAt,r.page.url,r.page.pageStatus,r.selectedMode,r.baselines.textOnly.score,r.baselines.textOnly.tier,r.baselines.metadataOnly.score,r.baselines.metadataOnly.tier,r.baselines.multiSignal.score,r.baselines.multiSignal.tier,r.groundTruth,r.interfaceCondition,r.participantResponse?.decision,r.participantResponse?.actionability,r.participantResponse?.decisionTimeMs,r.localScoringLatencyMs,r.totalLatencyMs,r.scenarioId,r.groupId,r.split,r.overlapCategory,r.configId,r.page.extractionStatusCode,r.page.rootSource,r.baselines.textOnly.evidenceSum,r.baselines.metadataOnly.evidenceSum,r.annotatorId,r.annotationProtocolVersion,r.reference?.labelledAt,r.reference?.recordedBeforePrediction,r.reference?.rationale,r.reference?.rationaleRecordedAt,r.reference?.rationaleRecordedBeforePrediction]);download("careerguard-evaluation.csv",[header,...rows].map(row=>row.map(csvCell).join(",")).join("\n"),"text/csv");});
 el.records.addEventListener("click",async event=>{
   const button=event.target.closest("button[data-delete-scan]");
   if(!button || button.disabled)return;

@@ -31,27 +31,17 @@ try {
     await page.screenshot({path:`${process.env.CG_POPUP_PREVIEW_DIR}/panel-ready.png`});
   }
   await page.click("#scan");
-  // Exercise an old/minimal notification too: pending output must never print an absent ID.
-  await page.evaluate(() => {const pending=structuredClone(record);delete pending.scenarioId;receive({type:"CG_LOCAL_RESULT",record:pending});});
-  assert.equal(await page.locator("#status").innerText(), "Local result ready; backend lookup in progress.");
+  await page.evaluate(() => finishScan({ok:true,record}));
+  await page.waitForFunction(() => document.getElementById("status").textContent === "Scan complete");
+  assert.equal(await page.locator(".duplicate-context").count(),0);
   let text = await page.locator("#result").innerText();
   assert.ok(!text.includes("Content reading completeness"));
-  for (const label of ["Scoring signal", "Context (no points)", "Information limitation (no points)", "Duplicate listing context", "Lookup in progress"]) assert.ok(text.includes(label));
+  for (const label of ["Scoring signal", "Context (no points)", "Information limitation (no points)"]) assert.ok(text.includes(label));
   assert.equal(await page.locator("details.technical-details").getAttribute("open"), null);
   assert.ok(!text.includes("Distance from risk-tier boundary"));
   await page.click(".technical-details summary");
   assert.ok((await page.locator("#result").innerText()).includes("Distance from risk-tier boundary: 30%"));
   assert.ok((await page.locator("#result").innerText()).includes("Content reading completeness: 85% (not prediction accuracy)"));
-  await page.evaluate(() => {record.escalation.status="completed";record.displayedResult.backend={contextReasons:[]};finishScan({ok:true,record});});
-  await page.waitForFunction(() => !document.getElementById("scan").disabled);
-  assert.ok((await page.locator(".backend-status").innerText()).includes("Lookup completed"));
-  for (const [status, expected] of [["unavailable","Backend unavailable"],["not-required","Lookup was not requested"]]) {
-    await page.click("#scan");
-    await page.evaluate(status => {record.escalation.status=status;delete record.displayedResult.backend;delete record.scenarioId;finishScan({ok:true,record});}, status);
-    await page.waitForFunction(() => !document.getElementById("scan").disabled);
-    assert.ok((await page.locator(".backend-status").innerText()).includes(expected));
-    assert.ok(!(await page.locator("body").innerText()).includes("undefined"));
-  }
   await page.click(".research-option summary");
   await page.fill("#caseId","CG-001");
   await page.click("#measureSpeed");
@@ -73,5 +63,5 @@ try {
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.screenshot({path:`${process.env.CG_POPUP_PREVIEW_DIR}/panel-narrow.png`});
   }
-  console.log("popup pending/completed/unavailable/not-requested states, reference wording and collapsed technical details passed");
+  console.log("local popup result, reference wording and collapsed technical details passed");
 } finally { await browser.close(); }

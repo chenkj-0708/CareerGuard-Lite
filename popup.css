@@ -47,7 +47,7 @@ h3{font-size:11px;margin:0 0 8px}
 ul{list-style:none;padding:0;margin:0;font-size:11px}
 li{margin:0 0 10px;padding-left:12px;border-left:3px solid #8bb39b}
 li strong{display:block;color:var(--muted);font-size:9px;font-weight:600;margin-bottom:2px}
-.explanation,.backend-status,.duplicate-context p{font-size:11px;margin:5px 0;color:var(--muted)}
+.explanation{font-size:11px;margin:5px 0;color:var(--muted)}
 .warning{color:#9b650b!important}
 .success{color:var(--green)!important}
 .technical-details{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;font-size:10px;color:var(--muted)}

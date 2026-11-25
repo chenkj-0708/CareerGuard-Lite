@@ -7,10 +7,10 @@
 </head>
 <body>
   <header><a class="brand" href="#overview"><span class="brand-mark">CG</span> CareerGuard <span>Lite</span></a><span class="header-note">RESEARCH WORKSPACE</span></header>
-  <nav aria-label="Dashboard sections"><a href="#overview">Overview</a><a href="#protocol">Research protocol</a><a href="#cases">Test pages</a><a href="#history">Scan history</a><a href="#connection">Connection</a></nav>
+  <nav aria-label="Dashboard sections"><a href="#overview">Overview</a><a href="#protocol">Research protocol</a><a href="#cases">Test pages</a><a href="#history">Scan history</a></nav>
   <div class="page-title" id="overview"><div><span class="eyebrow">EVALUATION WORKSPACE</span><h1>Research dashboard</h1><p>Register pages, record your judgement, and review scan results.</p></div><a class="quiet-link" href="#history">View scan history ↗</a></div>
   <main>
-    <section class="cards" id="summary" aria-label="Reference agreement and backend status"></section>
+    <section class="cards" id="summary" aria-label="Reference agreement"></section>
     <p class="overview-note">Agreement compares scans with your reference answers. Formal RQ1 analysis uses validation and test groups.</p>
     <details class="metric-details"><summary>How these comparisons work</summary><p id="metricsNote" class="metrics-note"></p></details>
     <section class="panel"><div class="section-head"><h2>Scan performance</h2><span class="subtle">RETAINED HISTORY</span></div><div id="scanSummary"></div></section>
@@ -61,13 +61,8 @@
     <section class="panel" id="history">
       <div class="section-head"><div><h2>Scan history</h2><p>Multi ✓ is the primary method, not a correctness mark.</p></div><div><button id="exportJson">Export JSON</button><button id="exportCsv">Export CSV</button><button id="clear" class="danger">Clear history</button></div></div>
       <p id="historyStatus" role="status"></p>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Case ID</th><th>Page</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Backend status</th><th>Signals</th><th>Truth</th><th>Latency</th><th>Actions</th></tr></thead><tbody id="records"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Case ID</th><th>Page</th><th>Text</th><th>Metadata</th><th>Multi</th><th>Signals</th><th>Truth</th><th>Latency</th><th>Actions</th></tr></thead><tbody id="records"></tbody></table></div>
     </section>
-    <details class="panel disclosure" id="connection"><summary><span class="section-number">03</span><span>Connection<small>Optional local backend</small></span></summary><div class="disclosure-body settings">
-
-      <label>Backend URL (fixed local address)<input id="backendUrl" type="url" value="http://127.0.0.1:8765" readonly></label>
-      <button id="health">Test backend</button><span id="healthStatus" role="status">Service: not checked · Index: not checked</span>
-    </div></details>
   </main>
   <footer>CareerGuard Lite <span>Local evidence · Advisory results</span></footer>
   <script type="module" src="dashboard.js"></script>
